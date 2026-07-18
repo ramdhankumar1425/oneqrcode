@@ -45,9 +45,20 @@ export default async function DashboardPage() {
             Here&apos;s what&apos;s happening with your codes.
           </p>
         </div>
-        <Button href="/app/codes/new">
-          <Plus size={16} /> New code
-        </Button>
+        {atLimit && ctx.plan.id === "free" ? (
+          <div className="flex items-center gap-2">
+            <Button disabled title="Dynamic-code limit reached">
+              <Plus size={16} /> New code
+            </Button>
+            <Button variant="accent" href="/app/billing">
+              Upgrade <ArrowUpRight size={15} />
+            </Button>
+          </div>
+        ) : (
+          <Button href="/app/codes/new">
+            <Plus size={16} /> New code
+          </Button>
+        )}
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -73,7 +84,12 @@ export default async function DashboardPage() {
           <div>
             <p className="font-semibold">You&apos;ve hit your dynamic-code limit.</p>
             <p className="text-sm text-forest-900/80">
-              Upgrade to Pro for 25 dynamic codes and full analytics.
+              Upgrade to Pro for unlimited dynamic codes and full analytics —
+              or{" "}
+              <Link href="/app/codes/new" className="underline">
+                create a static code
+              </Link>{" "}
+              (always free).
             </p>
           </div>
           <Button href="/app/billing">

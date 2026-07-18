@@ -14,7 +14,11 @@ export default async function MainLayout({
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar user={ctx.user} planName={ctx.plan.name} />
+      <Sidebar
+        user={ctx.user}
+        planId={ctx.plan.id}
+        planName={ctx.plan.name}
+      />
       <div className="md:pl-64">
         <main className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-10">
           {children}

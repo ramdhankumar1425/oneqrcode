@@ -11,6 +11,7 @@ import { ArrowUpRight, Trash, Upload, X } from "@/components/ui/icons";
 import { CopyButton } from "@/components/app/copy-button";
 import { QrRender } from "@/components/app/qr-render";
 import { encodedValue } from "@/lib/qr-value";
+import { archiveCode, updateCode, updateDesign } from "@/lib/actions/qr";
 
 export type CodeDetailData = {
   id: string;
@@ -62,27 +63,16 @@ export function CodeDetail({ data }: { data: CodeDetailData }) {
     e.preventDefault();
     setErr(null);
     setSavingDetails(true);
-    const res = await fetch(`/api/qr/${data.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title, destinationUrl }),
-    });
+    const result = await updateCode(data.id, { title, destinationUrl });
     setSavingDetails(false);
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      return setErr(d.error ?? "Could not save.");
-    }
+    if (!result.ok) return setErr(result.error);
     flash(setMsg, "Saved");
     router.refresh();
   }
 
   async function toggleActive(next: boolean) {
     setIsActive(next);
-    await fetch(`/api/qr/${data.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ isActive: next }),
-    });
+    await updateCode(data.id, { isActive: next });
     router.refresh();
   }
 
@@ -96,23 +86,19 @@ export function CodeDetail({ data }: { data: CodeDetailData }) {
 
   async function saveDesign() {
     setSavingDesign(true);
-    const res = await fetch(`/api/qr/${data.id}/design`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        foregroundColor: fg,
-        backgroundColor: bg,
-        logoUrl: logo,
-      }),
+    const result = await updateDesign(data.id, {
+      foregroundColor: fg,
+      backgroundColor: bg,
+      logoUrl: logo,
     });
     setSavingDesign(false);
-    if (res.ok) flash(setMsg, "Design saved");
+    if (result.ok) flash(setMsg, "Design saved");
     router.refresh();
   }
 
   async function archive() {
     if (!confirm("Archive this code? Its short link will stop redirecting.")) return;
-    await fetch(`/api/qr/${data.id}`, { method: "DELETE" });
+    await archiveCode(data.id);
     router.push("/app/codes");
     router.refresh();
   }

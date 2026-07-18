@@ -6,13 +6,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { signOut } from "@/lib/auth-client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/ui/logo";
 import {
+  ArrowUpRight,
   ChartBar,
   CreditCard,
   Grid,
   LogOut,
   Menu,
+  Plus,
   QrCode,
   User,
   X,
@@ -28,9 +31,11 @@ const nav = [
 
 export function Sidebar({
   user,
+  planId,
   planName,
 }: {
   user: { name: string; email: string };
+  planId: string;
   planName: string;
 }) {
   const pathname = usePathname();
@@ -46,15 +51,24 @@ export function Sidebar({
   const content = (
     <div className="flex h-full flex-col gap-1 p-4">
       <Link
-        href="/app/dashboard"
+        href="/"
         onClick={() => setOpen(false)}
-        className="mb-4 inline-flex items-center gap-2.5 px-2"
+        className="mb-5 inline-flex items-center gap-2.5 px-1"
       >
         <LogoMark size="sm" />
         <span className="text-lg font-semibold tracking-tight">
           one<span className="font-serif italic font-normal">qr</span>code
         </span>
       </Link>
+
+      <Button
+        variant="accent"
+        href="/app/codes/new"
+        className="mb-4 w-full"
+        onClick={() => setOpen(false)}
+      >
+        <Plus size={16} /> New code
+      </Button>
 
       <nav className="flex flex-col gap-1">
         {nav.map((item) => {
@@ -66,9 +80,9 @@ export function Sidebar({
               href={item.href}
               onClick={() => setOpen(false)}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-forest-900 text-primary-foreground"
+                  ? "bg-forest-950 text-accent"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
@@ -79,24 +93,44 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-3 border-t border-border pt-4">
-        <div className="flex items-center justify-between px-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {user.email}
-            </p>
+      <div className="mt-auto flex flex-col gap-3">
+        {planId === "free" && (
+          <Link
+            href="/app/billing"
+            onClick={() => setOpen(false)}
+            className="group flex items-center justify-between gap-2 rounded-lg border border-forest-900 bg-lime-300 px-3.5 py-3 transition-colors hover:bg-lime-400"
+          >
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-forest-950">
+                Upgrade to Pro
+              </span>
+              <span className="text-xs text-forest-900/70">
+                Unlimited dynamic codes
+              </span>
+            </div>
+            <ArrowUpRight size={16} className="text-forest-950" />
+          </Link>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{user.name}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </p>
+            </div>
+            <Badge variant={planId === "free" ? "soft" : "accent"}>
+              {planName}
+            </Badge>
           </div>
-          <Badge variant={planName === "Free" ? "soft" : "accent"}>
-            {planName}
-          </Badge>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LogOut size={17} /> Sign out
+          </button>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <LogOut size={17} /> Sign out
-        </button>
       </div>
     </div>
   );
@@ -105,7 +139,7 @@ export function Sidebar({
     <>
       {/* mobile top bar */}
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
-        <Link href="/app/dashboard" className="inline-flex items-center gap-2">
+        <Link href="/" className="inline-flex items-center gap-2">
           <LogoMark size="sm" />
           <span className="font-semibold tracking-tight">oneqrcode</span>
         </Link>

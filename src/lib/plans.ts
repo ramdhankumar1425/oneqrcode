@@ -7,7 +7,7 @@
  * (test vs prod) without code changes.
  */
 
-export type PlanId = "free" | "pro" | "business";
+export type PlanId = "free" | "pro";
 
 export type PlanLimits = {
   /** max active (non-archived) QR codes; null = unlimited */
@@ -43,6 +43,7 @@ export const PLANS: Record<PlanId, Plan> = {
     },
     features: [
       "1 dynamic QR code",
+      "Unlimited static codes",
       "1,000 scans / month",
       "Basic scan counts",
       "oqr.to short link",
@@ -56,11 +57,12 @@ export const PLANS: Record<PlanId, Plan> = {
     interval: "month",
     cfPlanId: process.env.CASHFREE_PLAN_ID_PRO ?? null,
     limits: {
-      qrCodes: 25,
+      qrCodes: null,
       analytics: true,
     },
     features: [
-      "25 dynamic QR codes",
+      "Unlimited dynamic QR codes",
+      "Unlimited static codes",
       "Unlimited scans",
       "Full analytics dashboard",
       "Custom short slugs",
@@ -68,31 +70,14 @@ export const PLANS: Record<PlanId, Plan> = {
       "Email support",
     ],
   },
-  business: {
-    id: "business",
-    name: "Business",
-    price: 290_000, // ₹2,900.00
-    currency: "INR",
-    interval: "month",
-    cfPlanId: process.env.CASHFREE_PLAN_ID_BUSINESS ?? null,
-    limits: {
-      qrCodes: null,
-      analytics: true,
-    },
-    features: [
-      "Unlimited QR codes",
-      "Bulk create & import",
-      "Priority support",
-    ],
-  },
 };
 
 /** Plans that carry a real billing cycle (i.e. create a subscription row). */
-export const PAID_PLAN_IDS = ["pro", "business"] as const;
+export const PAID_PLAN_IDS = ["pro"] as const;
 export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
 
 export function isPlanId(value: string): value is PlanId {
-  return value === "free" || value === "pro" || value === "business";
+  return value === "free" || value === "pro";
 }
 
 export function getPlan(id: PlanId): Plan {

@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Highlight } from "@/components/ui/highlight";
 import { LogoMark } from "@/components/ui/logo";
 import { HEARD_FROM_OPTIONS, USE_CASE_OPTIONS } from "@/lib/onboarding";
+import { submitOnboarding } from "@/lib/actions/onboarding";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -24,15 +25,10 @@ export default function OnboardingPage() {
       return;
     }
     setLoading(true);
-    const res = await fetch("/api/onboarding", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ heardFrom, useCase }),
-    });
+    const result = await submitOnboarding({ heardFrom, useCase });
     setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Could not save. Please try again.");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
     router.push("/app/dashboard");

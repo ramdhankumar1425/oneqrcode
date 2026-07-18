@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/icons";
 import { LogoMark } from "@/components/ui/logo";
 import { QrInteractive } from "@/components/marketing/qr-interactive";
+import { getCurrentUser } from "@/lib/session";
 
 const useCases = [
   "Business cards",
@@ -65,11 +66,13 @@ const steps = [
 const tiers = [
   {
     name: "Free",
-    price: "$0",
+    price: "₹0",
     period: "forever",
     blurb: "Try permanence on for size.",
+    href: "/signup",
     features: [
       "1 dynamic QR code",
+      "Unlimited static codes",
       "1,000 scans / month",
       "Basic scan counts",
       "oqr.to short link",
@@ -79,11 +82,13 @@ const tiers = [
   },
   {
     name: "Pro",
-    price: "$9",
+    price: "₹900",
     period: "per month",
     blurb: "For brands with things in print.",
+    href: "/signup",
     features: [
-      "25 dynamic QR codes",
+      "Unlimited dynamic QR codes",
+      "Unlimited static codes",
       "Unlimited scans",
       "Full analytics dashboard",
       "Custom short slugs",
@@ -114,7 +119,7 @@ const faqs = [
   },
   {
     q: "Can I track scans?",
-    a: "Every plan includes scan counts. Pro and Business add breakdowns by time, device, and location.",
+    a: "Every plan includes scan counts. Pro adds full breakdowns by time, device, and location.",
   },
   {
     q: "Do my codes expire?",
@@ -143,13 +148,16 @@ const footerColumns = [
   {
     title: "Legal",
     links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
+      { label: "Privacy", href: "/legal/privacy" },
+      { label: "Terms", href: "/legal/terms" },
     ],
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const user = await getCurrentUser();
+  const ctaHref = user ? "/app" : "/signup";
+
   return (
     <>
       <Navbar />
@@ -170,7 +178,7 @@ export default function Home() {
                 or the video never has to change.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                <Button variant="outline" size="lg" href="/#pricing">
+                <Button variant="outline" size="lg" href={ctaHref}>
                   Get my QR code <ArrowUpRight size={16} />
                 </Button>
                 <Button size="lg" href="/#how-it-works">
@@ -224,13 +232,13 @@ export default function Home() {
               {steps.map((step, i) => (
                 <div
                   key={step.title}
-                  className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-6"
+                  className="group flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-6 transition-[transform,background-color,border-color] duration-300 ease-out hover:-translate-y-1.5 hover:border-accent/40 hover:bg-white/[0.09]"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs font-semibold text-accent">
                       0{i + 1}
                     </span>
-                    <span className="flex size-9 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                    <span className="flex size-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-110">
                       <step.icon size={16} />
                     </span>
                   </div>
@@ -309,7 +317,7 @@ export default function Home() {
                     </ul>
                     <Button
                       variant={tier.featured ? "primary" : "outline"}
-                      href="#"
+                      href={ctaHref}
                     >
                       {tier.cta} <ArrowUpRight size={15} />
                     </Button>
@@ -362,7 +370,7 @@ export default function Home() {
             <p className="max-w-md text-sm text-white/70">
               Free plan available. No card required. Your codes never expire.
             </p>
-            <Button variant="accent" size="lg" href="/#pricing">
+            <Button variant="accent" size="lg" href={ctaHref}>
               Get my QR code <ArrowUpRight size={16} />
             </Button>
           </div>

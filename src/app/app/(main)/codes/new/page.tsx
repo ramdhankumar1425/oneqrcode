@@ -7,8 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Field, Hint, Input, Label } from "@/components/ui/input";
 import { Tabs } from "@/components/ui/tabs";
 import { ArrowUpRight, Upload, X } from "@/components/ui/icons";
+import Link from "next/link";
 import { QrRender } from "@/components/app/qr-render";
 import { encodedValue } from "@/lib/qr-value";
+import { createCode, getDynamicAllowance } from "@/lib/actions/qr";
 
 type SlugState = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -26,8 +28,19 @@ export default function NewCodePage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [origin, setOrigin] = useState("");
+  const [dynamicReached, setDynamicReached] = useState(false);
+  const [planName, setPlanName] = useState("Free");
 
   useEffect(() => setOrigin(window.location.origin), []);
+
+  useEffect(() => {
+    getDynamicAllowance().then((a) => {
+      setDynamicReached(a.reached);
+      setPlanName(a.planName);
+    });
+  }, []);
+
+  const dynamicBlocked = dynamicReached && type === "dynamic";
 
   // debounced slug availability
   const slugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,29 +84,28 @@ export default function NewCodePage() {
     if (!title.trim()) return setError("Give your code a name.");
     if (!/^https?:\/\//.test(destinationUrl))
       return setError("Enter a valid destination URL (including https://).");
+    if (dynamicBlocked)
+      return setError(
+        "You've reached your plan's dynamic-code limit. Upgrade to Pro or create a static code.",
+      );
     if (type === "dynamic" && slug && slugState === "taken")
       return setError("That short code is taken.");
 
     setSaving(true);
-    const res = await fetch("/api/qr", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        destinationUrl,
-        type,
-        shortCode: type === "dynamic" && slug ? slug : undefined,
-        design: { foregroundColor: fg, backgroundColor: bg, logoUrl: logo },
-      }),
+    const result = await createCode({
+      title: title.trim(),
+      destinationUrl,
+      type,
+      shortCode: type === "dynamic" && slug ? slug : undefined,
+      design: { foregroundColor: fg, backgroundColor: bg, logoUrl: logo },
     });
     setSaving(false);
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(data.error ?? "Could not create the code.");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-    router.push(`/app/codes/${data.code.id}`);
+    router.push(`/app/codes/${result.id}`);
     router.refresh();
   }
 
@@ -130,6 +142,21 @@ export default function NewCodePage() {
               ]}
             />
           </Field>
+
+          {dynamicBlocked && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-forest-900 bg-lime-300 p-4">
+              <p className="text-sm font-medium text-forest-950">
+                Your {planName} plan is at its dynamic-code limit. Upgrade for
+                unlimited, or switch to a static code.
+              </p>
+              <Link
+                href="/app/billing"
+                className="shrink-0 rounded-full bg-forest-950 px-3.5 py-1.5 text-xs font-semibold text-accent"
+              >
+                Upgrade to Pro
+              </Link>
+            </div>
+          )}
 
           <Field>
             <Label htmlFor="destination">Destination URL</Label>
@@ -229,7 +256,7 @@ export default function NewCodePage() {
           {error && <Hint error>{error}</Hint>}
 
           <div className="flex items-center gap-3">
-            <Button type="submit" size="lg" disabled={saving}>
+            <Button type="submit" size="lg" disabled={saving || dynamicBlocked}>
               {saving ? "Creating…" : "Create code"} <ArrowUpRight size={16} />
             </Button>
             <Button

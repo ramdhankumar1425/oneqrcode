@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Hint } from "@/components/ui/input";
 import { ArrowUpRight, Check } from "@/components/ui/icons";
+import { cancelActiveSubscription, startSubscription } from "@/lib/actions/billing";
 
 function formatPrice(paise: number): string {
   if (paise === 0) return "₹0";
@@ -36,19 +37,14 @@ export function BillingPanel({
   async function upgrade() {
     setErr(null);
     setLoading(true);
-    const res = await fetch("/api/subscriptions", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ plan: "pro" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
+    const result = await startSubscription("pro");
+    if (!result.ok) {
       setLoading(false);
-      setErr(data.error ?? "Could not start checkout.");
+      setErr(result.error);
       return;
     }
-    if (data.authLink) {
-      window.location.href = data.authLink;
+    if (result.authLink) {
+      window.location.href = result.authLink;
       return;
     }
     setLoading(false);
@@ -58,7 +54,7 @@ export function BillingPanel({
   async function cancel() {
     if (!confirm("Cancel your subscription? You'll drop to the Free plan.")) return;
     setLoading(true);
-    await fetch("/api/subscriptions/cancel", { method: "POST" });
+    await cancelActiveSubscription();
     setLoading(false);
     router.refresh();
   }

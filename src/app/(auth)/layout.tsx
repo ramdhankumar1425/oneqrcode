@@ -1,16 +1,22 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Highlight } from "@/components/ui/highlight";
 import { LogoMark } from "@/components/ui/logo";
+import { getCurrentUser } from "@/lib/session";
 
-export default function AuthLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // already signed in? no reason to see login/signup
+  const user = await getCurrentUser();
+  if (user) redirect("/app/dashboard");
+
   return (
     <main className="flex min-h-screen flex-1">
-      {/* brand panel */}
-      <aside className="hidden w-1/2 flex-col justify-between bg-lime-300 p-12 lg:flex">
+      {/* brand panel — wider so the form column stays compact */}
+      <aside className="hidden w-3/5 flex-col justify-between bg-lime-300 p-12 lg:flex">
         <Link href="/" className="inline-flex items-center gap-2.5">
           <LogoMark size="sm" />
           <span className="text-lg font-semibold tracking-tight">

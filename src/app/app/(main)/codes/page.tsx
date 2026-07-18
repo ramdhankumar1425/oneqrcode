@@ -3,21 +3,25 @@ import { redirect } from "next/navigation";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/index";
 import { qrCode } from "@/db/schemas";
-import { getCurrentUser } from "@/lib/session";
+import { getAppContext } from "@/lib/app-context";
 import { Badge, Eyebrow } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, Scan } from "@/components/ui/icons";
+import { ArrowUpRight, Plus, Scan } from "@/components/ui/icons";
 
 export default async function CodesPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const ctx = await getAppContext();
+  if (!ctx) redirect("/login");
 
   const codes = await db
     .select()
     .from(qrCode)
-    .where(and(eq(qrCode.userId, user.id), isNull(qrCode.archivedAt)))
+    .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
     .orderBy(desc(qrCode.createdAt));
+
+  const activeDynamic = codes.filter((c) => c.type === "dynamic").length;
+  const limit = ctx.plan.limits.qrCodes;
+  const atLimit = limit != null && activeDynamic >= limit;
 
   return (
     <div>
@@ -28,9 +32,20 @@ export default async function CodesPage() {
             {codes.length} active {codes.length === 1 ? "code" : "codes"}
           </p>
         </div>
-        <Button href="/app/codes/new">
-          <Plus size={16} /> New code
-        </Button>
+        {atLimit && ctx.plan.id === "free" ? (
+          <div className="flex items-center gap-2">
+            <Button disabled title="Dynamic-code limit reached">
+              <Plus size={16} /> New code
+            </Button>
+            <Button variant="accent" href="/app/billing">
+              Upgrade <ArrowUpRight size={15} />
+            </Button>
+          </div>
+        ) : (
+          <Button href="/app/codes/new">
+            <Plus size={16} /> New code
+          </Button>
+        )}
       </div>
 
       <div className="mt-8 flex flex-col gap-3">
