@@ -55,6 +55,8 @@ export const subscription = pgTable(
     cfSubscriptionId: text("cf_subscription_id").notNull().unique(),
     cfPlanId: text("cf_plan_id").notNull(),
     cfCustomerId: text("cf_customer_id").notNull(),
+    // checkout session id for the JS SDK — lets us re-open an unfinished authorization
+    cfSessionId: text("cf_session_id"),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -81,6 +83,8 @@ export const payment = pgTable(
     amount: integer("amount").notNull(),
     currency: text("currency").notNull().default("INR"),
     status: paymentStatusEnum("status").notNull().default("pending"),
+    // "auth" (mandate-setup charge) vs "charge" (recurring subscription fee)
+    paymentType: text("payment_type"),
 
     // Cashfree
     cfPaymentId: text("cf_payment_id").unique(),

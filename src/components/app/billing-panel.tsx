@@ -7,9 +7,14 @@ import { PLANS, type PlanId } from "@/lib/plans";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Hint } from "@/components/ui/input";
+import { Field, Hint, Input, Label } from "@/components/ui/input";
 import { ArrowUpRight, Check } from "@/components/ui/icons";
-import { cancelActiveSubscription, startSubscription } from "@/lib/actions/billing";
+import {
+  cancelActiveSubscription,
+  resumeSubscriptionAuthorization,
+  startSubscription,
+} from "@/lib/actions/billing";
+import { openSubscriptionCheckout } from "@/lib/cashfree-sdk";
 
 function formatPrice(paise: number): string {
   if (paise === 0) return "₹0";
@@ -28,6 +33,7 @@ export function BillingPanel({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [phone, setPhone] = useState("");
 
   const proActive =
     currentPlanId === "pro" &&
@@ -37,16 +43,41 @@ export function BillingPanel({
   async function upgrade() {
     setErr(null);
     setLoading(true);
-    const result = await startSubscription("pro");
+    const result = await startSubscription("pro", phone);
     if (!result.ok) {
       setLoading(false);
       setErr(result.error);
       return;
     }
-    if (result.authLink) {
-      window.location.href = result.authLink;
+    // hand the session to Cashfree's hosted checkout (payment method + mandate)
+    try {
+      await openSubscriptionCheckout(result.sessionId);
+    } catch {
+      setLoading(false);
+      setErr("Couldn't open the payment page. Please try again.");
+    }
+  }
+
+  async function completeSetup() {
+    setErr(null);
+    setLoading(true);
+    const result = await resumeSubscriptionAuthorization();
+    if (!result.ok) {
+      setLoading(false);
+      setErr(result.error);
+      router.refresh();
       return;
     }
+    if (result.sessionId) {
+      try {
+        await openSubscriptionCheckout(result.sessionId);
+      } catch {
+        setLoading(false);
+        setErr("Couldn't open the payment page. Please try again.");
+      }
+      return;
+    }
+    // already activated
     setLoading(false);
     router.refresh();
   }
@@ -63,7 +94,11 @@ export function BillingPanel({
 
   return (
     <div>
-      {err && <Hint error className="mb-4">{err}</Hint>}
+      {err && (
+        <Hint error className="mb-4">
+          {err}
+        </Hint>
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         {plans.map((id) => {
           const plan = PLANS[id];
@@ -108,13 +143,46 @@ export function BillingPanel({
                 </ul>
 
                 {id === "pro" && !proActive && !proPending && (
-                  <Button onClick={upgrade} disabled={loading}>
-                    {loading ? "Starting…" : "Upgrade to Pro"}{" "}
-                    <ArrowUpRight size={15} />
-                  </Button>
+                  <div className="flex flex-col gap-3">
+                    <Field>
+                      <Label htmlFor="phone">Mobile number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        inputMode="numeric"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="10-digit mobile"
+                        maxLength={10}
+                      />
+                      <Hint>Required by the bank to set up the mandate.</Hint>
+                    </Field>
+                    <Button onClick={upgrade} disabled={loading}>
+                      {loading ? "Starting…" : "Upgrade to Pro"}{" "}
+                      <ArrowUpRight size={15} />
+                    </Button>
+                  </div>
                 )}
                 {id === "pro" && proPending && (
-                  <Hint>Awaiting bank authorization for your mandate.</Hint>
+                  <div className="flex flex-col gap-2">
+                    <Hint>
+                      Your subscription is created, but the recurring-payment
+                      mandate isn&apos;t authorized with your bank yet. Add a
+                      payment method to finish.
+                    </Hint>
+                    <Button onClick={completeSetup} disabled={loading}>
+                      {loading ? "Opening…" : "Add payment method"}{" "}
+                      <ArrowUpRight size={15} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={cancel}
+                      disabled={loading}
+                      className="text-danger hover:bg-danger-soft"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 )}
                 {id === "pro" && proActive && (
                   <div className="flex flex-col gap-2">

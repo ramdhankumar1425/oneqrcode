@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/index";
 import { user as userTable } from "@/db/schemas";
@@ -11,8 +12,9 @@ export type AppContext = {
   onboardingCompleted: boolean;
 };
 
-/** Server-side context for /app pages: identity, plan, and onboarding status. */
-export async function getAppContext(): Promise<AppContext | null> {
+/** Server-side context for /app pages: identity, plan, and onboarding status.
+ *  Memoized per request so the layout and page don't re-run these queries. */
+export const getAppContext = cache(async (): Promise<AppContext | null> => {
   const current = await getCurrentUser();
   if (!current) return null;
 
@@ -34,4 +36,4 @@ export async function getAppContext(): Promise<AppContext | null> {
     plan,
     onboardingCompleted: profile?.onboardingCompletedAt != null,
   };
-}
+});

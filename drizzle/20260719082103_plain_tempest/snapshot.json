@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "2ddfc2ed-c2aa-4401-8111-d7324df5377d",
+  "id": "f9a9d192-6c53-4d4d-85d9-e4e53416cf48",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1158,6 +1158,19 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "payment_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "payment"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "cf_payment_id",
       "entityType": "columns",
       "schema": "public",
@@ -1380,6 +1393,19 @@
       "generated": null,
       "identity": null,
       "name": "cf_customer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "subscription"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cf_session_id",
       "entityType": "columns",
       "schema": "public",
       "table": "subscription"

@@ -25,7 +25,7 @@ function authHeaders(): Record<string, string> {
   return {
     "x-client-id": process.env.CASHFREE_CLIENT_ID ?? "",
     "x-client-secret": process.env.CASHFREE_CLIENT_SECRET ?? "",
-    "x-api-version": process.env.CASHFREE_API_VERSION ?? "2023-08-01",
+    "x-api-version": process.env.CASHFREE_API_VERSION ?? "2025-01-01",
     "content-type": "application/json",
   };
 }
@@ -65,7 +65,8 @@ export type CreateSubscriptionParams = {
   /** merchant-side subscription id we control and store as cfSubscriptionId */
   subscriptionId: string;
   planId: string;
-  customer: { id: string; name: string; email: string; phone?: string };
+  // customer_phone is required by Cashfree
+  customer: { id: string; name: string; email: string; phone: string };
   returnUrl: string;
 };
 
@@ -73,8 +74,8 @@ export type CashfreeSubscription = {
   cfSubscriptionId: string | null;
   subscriptionId: string;
   status: string | null;
-  /** link the customer must open to authorize the mandate */
-  authLink: string | null;
+  /** session id consumed by the Cashfree JS/mobile SDK subscriptionsCheckout() */
+  sessionId: string | null;
   raw: Record<string, unknown>;
 };
 
@@ -84,11 +85,7 @@ function parseSubscription(raw: Record<string, unknown>): CashfreeSubscription {
       (raw.cf_subscription_id as string | undefined)?.toString() ?? null,
     subscriptionId: (raw.subscription_id as string) ?? "",
     status: (raw.subscription_status as string) ?? null,
-    authLink:
-      (raw.subscription_session_url as string | undefined) ??
-      (raw.authorization_link as string | undefined) ??
-      (raw.auth_link as string | undefined) ??
-      null,
+    sessionId: (raw.subscription_session_id as string | undefined) ?? null,
     raw,
   };
 }
@@ -96,20 +93,26 @@ function parseSubscription(raw: Record<string, unknown>): CashfreeSubscription {
 export async function createSubscription(
   params: CreateSubscriptionParams,
 ): Promise<CashfreeSubscription> {
-  const raw = await cashfreeFetch<Record<string, unknown>>("/pg/subscriptions", {
-    method: "POST",
-    body: JSON.stringify({
-      subscription_id: params.subscriptionId,
-      plan_details: { plan_id: params.planId },
-      customer_details: {
-        customer_id: params.customer.id,
-        customer_name: params.customer.name,
-        customer_email: params.customer.email,
-        customer_phone: params.customer.phone ?? "0000000000",
-      },
-      subscription_meta: { return_url: params.returnUrl },
-    }),
-  });
+  const raw = await cashfreeFetch<Record<string, unknown>>(
+    "/pg/subscriptions",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        subscription_id: params.subscriptionId,
+        plan_details: { plan_id: params.planId },
+        customer_details: {
+          customer_id: params.customer.id,
+          customer_name: params.customer.name,
+          customer_email: params.customer.email,
+          customer_phone: params.customer.phone,
+        },
+        subscription_meta: {
+          return_url: params.returnUrl,
+          notification_channel: ["EMAIL", "SMS"],
+        },
+      }),
+    },
+  );
   return parseSubscription(raw);
 }
 
@@ -141,8 +144,7 @@ export function verifyWebhookSignature(
   rawBody: string,
   signature: string | null,
 ): boolean {
-  const secret =
-    process.env.CASHFREE_WEBHOOK_SECRET ?? process.env.CASHFREE_CLIENT_SECRET;
+  const secret = process.env.CASHFREE_CLIENT_SECRET;
   if (!secret || !timestamp || !signature) return false;
 
   const expected = createHmac("sha256", secret)
@@ -154,16 +156,11 @@ export function verifyWebhookSignature(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Map a Cashfree subscription status to our internal enum. */
+/** Map a Cashfree subscription status to our internal enum.
+ *  States per the Subscriptions API lifecycle. */
 export function mapSubscriptionStatus(
   status: string | null | undefined,
-):
-  | "incomplete"
-  | "active"
-  | "past_due"
-  | "canceled"
-  | "paused"
-  | null {
+): "incomplete" | "active" | "past_due" | "canceled" | "paused" | null {
   switch ((status ?? "").toUpperCase()) {
     case "ACTIVE":
       return "active";
@@ -171,11 +168,16 @@ export function mapSubscriptionStatus(
     case "BANK_APPROVAL_PENDING":
       return "incomplete";
     case "ON_HOLD":
+    case "CARD_EXPIRED":
       return "past_due";
     case "PAUSED":
+    case "CUSTOMER_PAUSED":
       return "paused";
     case "CANCELLED":
+    case "CUSTOMER_CANCELLED":
     case "COMPLETED":
+    case "EXPIRED":
+    case "LINK_EXPIRED":
       return "canceled";
     default:
       return null;

@@ -106,6 +106,7 @@ CREATE TABLE "payment" (
 	"amount" integer NOT NULL,
 	"currency" text DEFAULT 'INR' NOT NULL,
 	"status" "payment_status" DEFAULT 'pending'::"payment_status" NOT NULL,
+	"payment_type" text,
 	"cf_payment_id" text UNIQUE,
 	"cf_order_id" text,
 	"method" text,
@@ -127,6 +128,7 @@ CREATE TABLE "subscription" (
 	"cf_subscription_id" text NOT NULL UNIQUE,
 	"cf_plan_id" text NOT NULL,
 	"cf_customer_id" text NOT NULL,
+	"cf_session_id" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );

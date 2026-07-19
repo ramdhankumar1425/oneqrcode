@@ -1,10 +1,12 @@
+import { cache } from "react";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/index";
 import { subscription } from "@/db/schemas";
 import { type Plan, planForSubscription } from "@/lib/plans";
 
-/** Resolve a user's effective plan from their active/trialing subscription. */
-export async function getUserPlan(userId: string): Promise<Plan> {
+/** Resolve a user's effective plan from their active/trialing subscription.
+ *  Per-request memoized so repeated calls in one render share a single query. */
+export const getUserPlan = cache(async (userId: string): Promise<Plan> => {
   const [activeSub] = await db
     .select({ plan: subscription.plan })
     .from(subscription)
@@ -18,4 +20,4 @@ export async function getUserPlan(userId: string): Promise<Plan> {
     .limit(1);
 
   return planForSubscription(activeSub?.plan);
-}
+});
