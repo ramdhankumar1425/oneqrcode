@@ -11,6 +11,12 @@ export const auth = betterAuth({
     schema: { user, session, account, verification },
   }),
 
+  // cache the session in a signed cookie so getSession doesn't hit the DB on
+  // every request (DB-backed setups don't enable this by default)
+  session: {
+    cookieCache: { enabled: true, maxAge: 300 },
+  },
+
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, Hint, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -11,7 +10,6 @@ import { HEARD_FROM_OPTIONS, USE_CASE_OPTIONS } from "@/lib/onboarding";
 import { submitOnboarding } from "@/lib/actions/onboarding";
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const [heardFrom, setHeardFrom] = useState("");
   const [useCase, setUseCase] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +24,14 @@ export default function OnboardingPage() {
     }
     setLoading(true);
     const result = await submitOnboarding({ heardFrom, useCase });
-    setLoading(false);
     if (!result.ok) {
+      setLoading(false);
       setError(result.error);
       return;
     }
-    router.push("/app/dashboard");
-    router.refresh();
+    // full navigation — bypasses the client router cache, which may hold the
+    // "not onboarded → /app/onboarding" redirect from an earlier prefetch
+    window.location.assign("/app/dashboard");
   }
 
   return (

@@ -57,7 +57,7 @@ export async function startSubscription(
   }
 
   const merchantSubscriptionId = `sub_${nanoid()}`;
-  const returnUrl = `${process.env.APP_URL ?? "http://localhost:3000"}/app/billing?sub=${merchantSubscriptionId}`;
+  const returnUrl = `${process.env.APP_URL ?? "http://localhost:3000"}/app/dashboard?sub=${merchantSubscriptionId}`;
 
   let cf;
   try {
