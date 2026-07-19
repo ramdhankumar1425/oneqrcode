@@ -14,21 +14,23 @@ export default async function DashboardPage() {
   const ctx = await getAppContext();
   if (!ctx) redirect("/login");
 
-  const [stats] = await db
-    .select({
-      activeDynamic: sql<number>`count(*) filter (where ${qrCode.type} = 'dynamic' and ${qrCode.archivedAt} is null)`,
-      activeTotal: sql<number>`count(*) filter (where ${qrCode.archivedAt} is null)`,
-      totalScans: sql<number>`coalesce(sum(${qrCode.scanCount}), 0)`,
-    })
-    .from(qrCode)
-    .where(eq(qrCode.userId, ctx.user.id));
-
-  const recent = await db
-    .select()
-    .from(qrCode)
-    .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
-    .orderBy(desc(qrCode.createdAt))
-    .limit(5);
+  // independent reads — run them in one wall-clock round-trip, not two
+  const [[stats], recent] = await Promise.all([
+    db
+      .select({
+        activeDynamic: sql<number>`count(*) filter (where ${qrCode.type} = 'dynamic' and ${qrCode.archivedAt} is null)`,
+        activeTotal: sql<number>`count(*) filter (where ${qrCode.archivedAt} is null)`,
+        totalScans: sql<number>`coalesce(sum(${qrCode.scanCount}), 0)`,
+      })
+      .from(qrCode)
+      .where(eq(qrCode.userId, ctx.user.id)),
+    db
+      .select()
+      .from(qrCode)
+      .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
+      .orderBy(desc(qrCode.createdAt))
+      .limit(5),
+  ]);
 
   const activeDynamic = Number(stats?.activeDynamic ?? 0);
   const limit = ctx.plan.limits.qrCodes;

@@ -18,13 +18,15 @@ export const getAppContext = cache(async (): Promise<AppContext | null> => {
   const current = await getCurrentUser();
   if (!current) return null;
 
-  const [profile] = await db
-    .select({ onboardingCompletedAt: userTable.onboardingCompletedAt })
-    .from(userTable)
-    .where(eq(userTable.id, current.id))
-    .limit(1);
-
-  const plan = await getUserPlan(current.id);
+  // independent reads — run them in one wall-clock round-trip, not two
+  const [[profile], plan] = await Promise.all([
+    db
+      .select({ onboardingCompletedAt: userTable.onboardingCompletedAt })
+      .from(userTable)
+      .where(eq(userTable.id, current.id))
+      .limit(1),
+    getUserPlan(current.id),
+  ]);
 
   return {
     user: {
