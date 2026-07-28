@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cacheDestination, getCachedDestination } from "@/lib/cache";
+import { cacheCode, getCachedCode } from "@/lib/cache";
+import { recordScan } from "@/lib/scan";
 
 /**
  * Public redirect hot path: oqr.to/r/<shortCode>.
  *
  * No logged-in user here, so we use the service-role client (bypasses RLS) to
  * resolve any code by its short_code. Cache-first: a hit means the code is
- * active and we already know where it points, so we skip the database entirely.
- * On a miss we read the row, and only cache (and redirect) when the code is
- * active — so the mere presence of a cache entry implies an active code. The
- * destination-update / archive paths invalidate this key (see lib/cache + the
- * QR update actions).
+ * active and we already know its id + destination, so we skip the database
+ * entirely — and still record the scan (the cached id makes that a no-DB-read
+ * write). On a miss we read the row, and only cache (and redirect) when the code
+ * is active, so a cache entry implies an active code. The destination-update /
+ * archive paths invalidate this key (see lib/cache + the QR update actions).
+ *
+ * Scan recording is deferred (see lib/scan → after()), so it never adds latency
+ * to the redirect.
  */
 
 type Ctx = { params: Promise<{ shortCode: string }> };
@@ -29,11 +33,11 @@ function notFound() {
 export async function GET(request: Request, { params }: Ctx) {
   const { shortCode } = await params;
 
-  // 1) cache hit → redirect immediately
-  const cached = await getCachedDestination(shortCode);
+  // 1) cache hit → record scan + redirect immediately (no DB)
+  const cached = await getCachedCode(shortCode);
   if (cached) {
-    recordScan(shortCode, request);
-    return redirectTo(cached);
+    recordScan(cached.id, request);
+    return redirectTo(cached.destinationUrl);
   }
 
   // 2) cache miss → look up the code (service-role: no user session on this path)
@@ -48,27 +52,11 @@ export async function GET(request: Request, { params }: Ctx) {
     return notFound();
   }
 
-  // 3) warm the cache for subsequent scans, then redirect
-  await cacheDestination(code.short_code, code.destination_url);
-  recordScan(code.short_code, request);
+  // 3) warm the cache, record the scan, then redirect
+  await cacheCode(code.short_code, {
+    id: code.id,
+    destinationUrl: code.destination_url,
+  });
+  recordScan(code.id, request);
   return redirectTo(code.destination_url);
-}
-
-/**
- * TODO(scan-audit): record scan analytics without slowing the redirect.
- *
- * This should run fire-and-forget (do NOT await on the redirect path) and, via
- * the service-role client:
- *   1. Insert a qr_scan row: hashed IP (ip_hash), country (from geo headers),
- *      parsed device_type/os/browser (from user-agent), referrer, and utm_*
- *      params off the request URL.
- *   2. Bump the denormalized counters on qr_code: scan_count += 1 and
- *      last_scanned_at = now (so Free-plan "basic scan counts" work without
- *      querying qr_scan).
- *
- * Prefer offloading to a queue / waitUntil() so redirect latency stays flat.
- * Intentionally a no-op for now.
- */
-function recordScan(_shortCode: string, _request: Request): void {
-  // no-op — see TODO above
 }

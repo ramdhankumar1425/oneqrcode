@@ -306,3 +306,46 @@ as $$
   group by 1
   order by 1;
 $$;
+
+-- ══════════════════════════ Scan recording ════════════════════════════
+-- Called only by the service-role client from the /r/[shortCode] hot path.
+-- Inserts the scan row and bumps the denormalized counters in one round-trip.
+-- Execute is revoked from anon/authenticated so it can't be abused via the
+-- public PostgREST endpoint to inflate counts.
+create or replace function public.record_scan(
+  p_qr_code_id   uuid,
+  p_ip_hash      text,
+  p_country      text,
+  p_device_type  device_type,
+  p_os           os,
+  p_browser      browser,
+  p_referrer     text,
+  p_utm_source   text,
+  p_utm_medium   text,
+  p_utm_campaign text
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.qr_scan (
+    qr_code_id, ip_hash, country, device_type, os, browser,
+    referrer, utm_source, utm_medium, utm_campaign
+  ) values (
+    p_qr_code_id, p_ip_hash, p_country, p_device_type, p_os, p_browser,
+    p_referrer, p_utm_source, p_utm_medium, p_utm_campaign
+  );
+
+  update public.qr_code
+    set scan_count = scan_count + 1, last_scanned_at = now()
+    where id = p_qr_code_id;
+end;
+$$;
+
+revoke execute on function public.record_scan(
+  uuid, text, text, device_type, os, browser, text, text, text, text
+) from public;
+grant execute on function public.record_scan(
+  uuid, text, text, device_type, os, browser, text, text, text, text
+) to service_role;
