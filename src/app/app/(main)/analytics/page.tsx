@@ -7,9 +7,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat";
 import { BarChart } from "@/components/ui/bar-chart";
+import { DonutChart, type DonutDatum } from "@/components/ui/donut-chart";
 import { ArrowUpRight, ChartBar, QrCode, Scan } from "@/components/ui/icons";
 
 const RANGE_DAYS = 14;
+
+const LABELS: Record<string, string> = {
+  desktop: "Desktop",
+  mobile: "Mobile",
+  tablet: "Tablet",
+  windows: "Windows",
+  macos: "macOS",
+  linux: "Linux",
+  android: "Android",
+  ios: "iOS",
+  chrome: "Chrome",
+  firefox: "Firefox",
+  safari: "Safari",
+  edge: "Edge",
+  other: "Other",
+};
+
+const prettify = (key: string) =>
+  LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+
+type BreakdownRow = { dimension: string; label: string; count: number };
+
+function pick(rows: BreakdownRow[], dimension: string): DonutDatum[] {
+  return rows
+    .filter((r) => r.dimension === dimension)
+    .map((r) => ({ label: prettify(r.label), value: Number(r.count) }));
+}
 
 export default async function AnalyticsPage() {
   const ctx = await getAppContext();
@@ -42,22 +70,31 @@ export default async function AnalyticsPage() {
   const since = new Date(Date.now() - RANGE_DAYS * 86_400_000).toISOString();
   const supabase = await createClient();
 
-  const [{ data: totalsRows }, { data: seriesRows }, { data: topRows }] =
-    await Promise.all([
-      supabase.rpc("analytics_totals"),
-      supabase.rpc("analytics_daily", { since }),
-      supabase
-        .from("qr_code")
-        .select("id, title, scan_count")
-        .is("archived_at", null)
-        .order("scan_count", { ascending: false })
-        .limit(5),
-    ]);
+  const [
+    { data: totalsRows },
+    { data: seriesRows },
+    { data: breakdownRows },
+    { data: topRows },
+  ] = await Promise.all([
+    supabase.rpc("analytics_totals"),
+    supabase.rpc("analytics_daily", { since }),
+    supabase.rpc("analytics_breakdown", { since }),
+    supabase
+      .from("qr_code")
+      .select("id, title, scan_count")
+      .is("archived_at", null)
+      .order("scan_count", { ascending: false })
+      .limit(5),
+  ]);
 
   const totals = (Array.isArray(totalsRows) ? totalsRows[0] : totalsRows) as
     | { active_codes: number; total_scans: number }
     | undefined;
   const series = (seriesRows ?? []) as { day: string; scans: number }[];
+  const breakdown = (breakdownRows ?? []) as BreakdownRow[];
+  const deviceData = pick(breakdown, "device");
+  const osData = pick(breakdown, "os");
+  const browserData = pick(breakdown, "browser");
   const topCodes = (topRows ?? []) as {
     id: string;
     title: string;
@@ -107,6 +144,24 @@ export default async function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent>
+            <DonutChart title="Devices" data={deviceData} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <DonutChart title="Operating systems" data={osData} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <DonutChart title="Browsers" data={browserData} />
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="mt-6">
         <h2 className="text-lg font-semibold tracking-tight">Top codes</h2>

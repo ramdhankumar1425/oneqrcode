@@ -307,6 +307,33 @@ as $$
   order by 1;
 $$;
 
+-- Scan breakdowns by device / OS / browser for the Pro analytics donuts.
+-- One round-trip; each row is (dimension, label, count) scoped to auth.uid().
+create or replace function public.analytics_breakdown(since timestamptz)
+returns table (dimension text, label text, count bigint)
+language sql
+stable
+security definer set search_path = public
+as $$
+  select 'device'::text, sc.device_type::text, count(*)::bigint
+  from public.qr_scan sc
+  join public.qr_code c on c.id = sc.qr_code_id
+  where c.user_id = auth.uid() and sc.created_at >= since
+  group by sc.device_type
+  union all
+  select 'os'::text, sc.os::text, count(*)::bigint
+  from public.qr_scan sc
+  join public.qr_code c on c.id = sc.qr_code_id
+  where c.user_id = auth.uid() and sc.created_at >= since
+  group by sc.os
+  union all
+  select 'browser'::text, sc.browser::text, count(*)::bigint
+  from public.qr_scan sc
+  join public.qr_code c on c.id = sc.qr_code_id
+  where c.user_id = auth.uid() and sc.created_at >= since
+  group by sc.browser;
+$$;
+
 -- ══════════════════════════ Scan recording ════════════════════════════
 -- Called only by the service-role client from the /r/[shortCode] hot path.
 -- Inserts the scan row and bumps the denormalized counters in one round-trip.
