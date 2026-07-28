@@ -174,8 +174,8 @@ export default async function Home() {
               </h1>
               <p className="max-w-md text-base leading-relaxed text-forest-900/80">
                 A oneqrcode is printed once and points wherever you need. Swap
-                the destination in seconds — the code on the page, the packaging,
-                or the video never has to change.
+                the destination in seconds — the code on the page, the
+                packaging, or the video never has to change.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <Button variant="outline" size="lg" href={ctaHref}>
@@ -198,11 +198,13 @@ export default async function Home() {
         <section className="mx-auto max-w-6xl px-6 py-20">
           <Eyebrow>What you can protect</Eyebrow>
           <h2 className="text-display mt-3 max-w-2xl text-4xl md:text-5xl">
-            Anything you can&apos;t <Highlight variant="lime">edit later</Highlight>.
+            Anything you can&apos;t{" "}
+            <Highlight variant="lime">edit later</Highlight>.
           </h2>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            If a QR code is committed to something you can&apos;t change — paper,
-            video, packaging, print runs — a permanent oneqrcode keeps it working.
+            If a QR code is committed to something you can&apos;t change —
+            paper, video, packaging, print runs — a permanent oneqrcode keeps it
+            working.
           </p>
           <ul className="mt-8 flex flex-wrap gap-2.5">
             {useCases.map((useCase) => (
@@ -232,7 +234,7 @@ export default async function Home() {
               {steps.map((step, i) => (
                 <div
                   key={step.title}
-                  className="group flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-6 transition-[transform,background-color,border-color] duration-300 ease-out hover:-translate-y-1.5 hover:border-accent/40 hover:bg-white/[0.09]"
+                  className="group flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-6 transition-[transform,background-color,border-color] duration-300 ease-out hover:-translate-y-1.5 hover:border-accent/40 hover:bg-white/9"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs font-semibold text-accent">
@@ -276,7 +278,7 @@ export default async function Home() {
                     "relative transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-2 hover:shadow-float",
                     tier.featured
                       ? "border-forest-900 shadow-float ring-2 ring-forest-900"
-                      : "hover:border-forest-300"
+                      : "hover:border-forest-300",
                   )}
                 >
                   {tier.featured ? (
@@ -411,7 +413,9 @@ export default async function Home() {
             <span className="text-xs text-muted-foreground">
               © 2026 oneqrcode. Made for print that lasts.
             </span>
-            <span className="font-mono text-xs text-muted-foreground">oqr.to</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              oqr.to
+            </span>
           </div>
         </div>
       </footer>
