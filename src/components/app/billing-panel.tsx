@@ -7,14 +7,15 @@ import { PLANS, type PlanId } from "@/lib/plans";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, Hint, Input, Label } from "@/components/ui/input";
+import { Hint } from "@/components/ui/input";
 import { ArrowUpRight, Check } from "@/components/ui/icons";
 import {
   cancelActiveSubscription,
+  confirmSubscription,
   resumeSubscriptionAuthorization,
   startSubscription,
 } from "@/lib/actions/billing";
-import { openSubscriptionCheckout } from "@/lib/cashfree-sdk";
+import { openSubscriptionCheckout } from "@/lib/razorpay-checkout";
 
 function formatPrice(paise: number): string {
   if (paise === 0) return "₹0";
@@ -25,33 +26,56 @@ export function BillingPanel({
   currentPlanId,
   subStatus,
   periodEnd,
+  userName,
+  userEmail,
 }: {
   currentPlanId: PlanId;
   subStatus: string | null;
   periodEnd: string | null;
+  userName: string;
+  userEmail: string;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [phone, setPhone] = useState("");
 
   const proActive =
     currentPlanId === "pro" &&
     (subStatus === "active" || subStatus === "trialing");
   const proPending = subStatus === "incomplete";
 
+  function openCheckout(subscriptionId: string) {
+    return openSubscriptionCheckout({
+      subscriptionId,
+      prefill: { name: userName, email: userEmail },
+      onSuccess: async (resp) => {
+        const c = await confirmSubscription({
+          paymentId: resp.razorpay_payment_id,
+          subscriptionId: resp.razorpay_subscription_id,
+          signature: resp.razorpay_signature,
+        });
+        setLoading(false);
+        if (!c.ok) {
+          setErr(c.error);
+          return;
+        }
+        router.refresh();
+      },
+      onDismiss: () => setLoading(false),
+    });
+  }
+
   async function upgrade() {
     setErr(null);
     setLoading(true);
-    const result = await startSubscription("pro", phone);
+    const result = await startSubscription("pro");
     if (!result.ok) {
       setLoading(false);
       setErr(result.error);
       return;
     }
-    // hand the session to Cashfree's hosted checkout (payment method + mandate)
     try {
-      await openSubscriptionCheckout(result.sessionId);
+      await openCheckout(result.subscriptionId);
     } catch {
       setLoading(false);
       setErr("Couldn't open the payment page. Please try again.");
@@ -68,9 +92,9 @@ export function BillingPanel({
       router.refresh();
       return;
     }
-    if (result.sessionId) {
+    if (result.subscriptionId) {
       try {
-        await openSubscriptionCheckout(result.sessionId);
+        await openCheckout(result.subscriptionId);
       } catch {
         setLoading(false);
         setErr("Couldn't open the payment page. Please try again.");
@@ -143,32 +167,17 @@ export function BillingPanel({
                 </ul>
 
                 {id === "pro" && !proActive && !proPending && (
-                  <div className="flex flex-col gap-3">
-                    <Field>
-                      <Label htmlFor="phone">Mobile number</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        inputMode="numeric"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="10-digit mobile"
-                        maxLength={10}
-                      />
-                      <Hint>Required by the bank to set up the mandate.</Hint>
-                    </Field>
-                    <Button onClick={upgrade} disabled={loading}>
-                      {loading ? "Starting…" : "Upgrade to Pro"}{" "}
-                      <ArrowUpRight size={15} />
-                    </Button>
-                  </div>
+                  <Button onClick={upgrade} disabled={loading}>
+                    {loading ? "Starting…" : "Upgrade to Pro"}{" "}
+                    <ArrowUpRight size={15} />
+                  </Button>
                 )}
                 {id === "pro" && proPending && (
                   <div className="flex flex-col gap-2">
                     <Hint>
                       Your subscription is created, but the recurring-payment
-                      mandate isn&apos;t authorized with your bank yet. Add a
-                      payment method to finish.
+                      mandate isn&apos;t authorized yet. Add a payment method to
+                      finish.
                     </Hint>
                     <Button onClick={completeSetup} disabled={loading}>
                       {loading ? "Opening…" : "Add payment method"}{" "}

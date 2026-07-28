@@ -1,23 +1,18 @@
 import { cache } from "react";
-import { and, desc, eq, inArray } from "drizzle-orm";
-import { db } from "@/index";
-import { subscription } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { type Plan, planForSubscription } from "@/lib/plans";
 
-/** Resolve a user's effective plan from their active/trialing subscription.
- *  Per-request memoized so repeated calls in one render share a single query. */
-export const getUserPlan = cache(async (userId: string): Promise<Plan> => {
-  const [activeSub] = await db
-    .select({ plan: subscription.plan })
-    .from(subscription)
-    .where(
-      and(
-        eq(subscription.userId, userId),
-        inArray(subscription.status, ["active", "trialing"]),
-      ),
-    )
-    .orderBy(desc(subscription.createdAt))
-    .limit(1);
+/** Resolve the current user's effective plan from their active subscription.
+ *  RLS scopes the query to the logged-in user. Memoized per request. */
+export const getUserPlan = cache(async (): Promise<Plan> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("subscription")
+    .select("plan")
+    .in("status", ["active", "trialing"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  return planForSubscription(activeSub?.plan);
+  return planForSubscription(data?.plan as string | undefined);
 });

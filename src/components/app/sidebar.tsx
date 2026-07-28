@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { signOut } from "@/lib/auth-client";
+import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/ui/logo";
@@ -43,7 +43,8 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
 
   async function handleSignOut() {
-    await signOut();
+    const supabase = createClient();
+    await supabase.auth.signOut();
     router.push("/");
     router.refresh();
   }

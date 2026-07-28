@@ -1,27 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
+import { updateSession } from "@/lib/supabase/middleware";
 
 /**
- * Edge auth routing (optimistic — checks cookie presence only, no DB):
- *  - signed-in users never see /login or /signup → sent to the dashboard
- *  - signed-out users can't open /app/* → sent to /login
- * Real session validation still happens in the /app layout and server actions.
+ * Refreshes the Supabase session on each matched request, then applies auth
+ * routing:
+ *   - signed-in users never see /login or /signup → sent to the dashboard
+ *   - signed-out users can't open /app/* → sent to /login
+ * Real per-table enforcement is RLS; this is just navigation. Redirects carry
+ * the refreshed auth cookies so tokens stay fresh across the bounce.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
-  const hasSession = getSessionCookie(request) != null;
 
   const isAuthPage = pathname === "/login" || pathname === "/signup";
 
-  if (isAuthPage && hasSession) {
-    return NextResponse.redirect(new URL("/app/dashboard", request.url));
-  }
-  if (pathname.startsWith("/app") && !hasSession) {
-    const url = new URL("/login", request.url);
-    return NextResponse.redirect(url);
-  }
+  const redirectTo = (path: string) => {
+    const res = NextResponse.redirect(new URL(path, request.url));
+    for (const cookie of response.cookies.getAll()) res.cookies.set(cookie);
+    return res;
+  };
 
-  return NextResponse.next();
+  if (isAuthPage && user) return redirectTo("/app/dashboard");
+  if (pathname.startsWith("/app") && !user) return redirectTo("/login");
+
+  return response;
 }
 
 export const config = {

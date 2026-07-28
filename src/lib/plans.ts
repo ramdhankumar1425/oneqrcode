@@ -3,8 +3,8 @@
  * Lives in code, not the database. The `subscription.plan` column stores only
  * a PlanId string, validated against this catalog.
  *
- * Cashfree plan ids come from env so they can differ per environment
- * (test vs prod) without code changes.
+ * Razorpay plan ids come from env so they can differ per environment
+ * (test vs live) without code changes.
  */
 
 export type PlanId = "free" | "pro";
@@ -23,8 +23,8 @@ export type Plan = {
   price: number;
   currency: "INR";
   interval: "month" | null; // null = free / no billing cycle
-  /** Cashfree plan id, or null for free (no gateway subscription) */
-  cfPlanId: string | null;
+  /** Razorpay plan id, or null for free (no gateway subscription) */
+  rzpPlanId: string | null;
   limits: PlanLimits;
   features: string[];
 };
@@ -36,7 +36,7 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 0,
     currency: "INR",
     interval: null,
-    cfPlanId: null,
+    rzpPlanId: null,
     limits: {
       qrCodes: 1,
       analytics: false,
@@ -55,7 +55,7 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 90_000, // ₹900.00
     currency: "INR",
     interval: "month",
-    cfPlanId: process.env.CASHFREE_PLAN_ID_PRO ?? null,
+    rzpPlanId: process.env.RAZORPAY_PLAN_ID_PRO ?? null,
     limits: {
       qrCodes: null,
       analytics: true,

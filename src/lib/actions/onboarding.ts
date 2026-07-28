@@ -1,8 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
-import { db } from "@/index";
-import { user } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { isHeardFrom, isUseCase } from "@/lib/onboarding";
 import { getCurrentUser } from "@/lib/session";
 
@@ -22,14 +20,17 @@ export async function submitOnboarding(input: {
     return { ok: false, error: "Please select how you'll use oneqrcode" };
   }
 
-  await db
-    .update(user)
-    .set({
-      heardFrom: input.heardFrom,
-      useCase: input.useCase,
-      onboardingCompletedAt: new Date(),
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      heard_from: input.heardFrom,
+      use_case: input.useCase,
+      onboarding_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
-    .where(eq(user.id, current.id));
+    .eq("id", current.id);
 
+  if (error) return { ok: false, error: "Couldn't save. Please try again." };
   return { ok: true };
 }

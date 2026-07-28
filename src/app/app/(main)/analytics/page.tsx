@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode, qrScan } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { getAppContext } from "@/lib/app-context";
 import { Badge, Eyebrow } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,37 +39,30 @@ export default async function AnalyticsPage() {
     );
   }
 
-  const since = new Date(Date.now() - RANGE_DAYS * 86_400_000);
+  const since = new Date(Date.now() - RANGE_DAYS * 86_400_000).toISOString();
+  const supabase = await createClient();
 
-  const [totals] = await db
-    .select({
-      activeCodes: sql<number>`count(*) filter (where ${qrCode.archivedAt} is null)`,
-      totalScans: sql<number>`coalesce(sum(${qrCode.scanCount}), 0)`,
-    })
-    .from(qrCode)
-    .where(eq(qrCode.userId, ctx.user.id));
+  const [{ data: totalsRows }, { data: seriesRows }, { data: topRows }] =
+    await Promise.all([
+      supabase.rpc("analytics_totals"),
+      supabase.rpc("analytics_daily", { since }),
+      supabase
+        .from("qr_code")
+        .select("id, title, scan_count")
+        .is("archived_at", null)
+        .order("scan_count", { ascending: false })
+        .limit(5),
+    ]);
 
-  const series = await db
-    .select({
-      day: sql<string>`date_trunc('day', ${qrScan.createdAt})::date`,
-      scans: sql<number>`count(*)`,
-    })
-    .from(qrScan)
-    .innerJoin(qrCode, eq(qrScan.qrCodeId, qrCode.id))
-    .where(and(eq(qrCode.userId, ctx.user.id), gte(qrScan.createdAt, since)))
-    .groupBy(sql`date_trunc('day', ${qrScan.createdAt})`)
-    .orderBy(sql`date_trunc('day', ${qrScan.createdAt})`);
-
-  const topCodes = await db
-    .select({
-      id: qrCode.id,
-      title: qrCode.title,
-      scanCount: qrCode.scanCount,
-    })
-    .from(qrCode)
-    .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
-    .orderBy(desc(qrCode.scanCount))
-    .limit(5);
+  const totals = (Array.isArray(totalsRows) ? totalsRows[0] : totalsRows) as
+    | { active_codes: number; total_scans: number }
+    | undefined;
+  const series = (seriesRows ?? []) as { day: string; scans: number }[];
+  const topCodes = (topRows ?? []) as {
+    id: string;
+    title: string;
+    scan_count: number;
+  }[];
 
   const chartData = series.map((r) => ({
     label: new Date(r.day).toLocaleDateString("en-US", {
@@ -92,12 +83,12 @@ export default async function AnalyticsPage() {
         <StatCard
           label="Total scans"
           icon={<Scan size={12} />}
-          value={Number(totals?.totalScans ?? 0).toLocaleString("en-US")}
+          value={Number(totals?.total_scans ?? 0).toLocaleString("en-US")}
         />
         <StatCard
           label="Active codes"
           icon={<QrCode size={12} />}
-          value={Number(totals?.activeCodes ?? 0).toLocaleString("en-US")}
+          value={Number(totals?.active_codes ?? 0).toLocaleString("en-US")}
         />
       </div>
 
@@ -128,7 +119,7 @@ export default async function AnalyticsPage() {
                 <Card className="flex items-center justify-between gap-4 p-4 transition-shadow hover:shadow-float">
                   <span className="truncate font-medium">{code.title}</span>
                   <Badge variant="soft">
-                    {code.scanCount.toLocaleString("en-US")} scans
+                    {Number(code.scan_count).toLocaleString("en-US")} scans
                   </Badge>
                 </Card>
               </Link>

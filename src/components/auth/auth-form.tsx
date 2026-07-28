@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Field, Hint, Input, Label } from "@/components/ui/input";
 import { Google } from "@/components/ui/icons";
@@ -16,36 +16,64 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setLoading(true);
 
-    const { error } = isSignup
-      ? await authClient.signUp.email({ name, email, password })
-      : await authClient.signIn.email({ email, password });
+    const supabase = createClient();
 
-    setLoading(false);
-
-    if (error) {
-      setError(error.message ?? "Something went wrong. Please try again.");
+    if (isSignup) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/app/onboarding`,
+        },
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message ?? "Something went wrong. Please try again.");
+        return;
+      }
+      // no session → email confirmation is required (Supabase default)
+      if (!data.session) {
+        setNotice("Check your email to confirm your account, then sign in.");
+        return;
+      }
+      router.push("/app/onboarding");
+      router.refresh();
       return;
     }
 
-    // new signups go through onboarding; the /app guard re-checks either way
-    router.push(isSignup ? "/app/onboarding" : "/app/dashboard");
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message ?? "Invalid email or password.");
+      return;
+    }
+    router.push("/app/dashboard");
     router.refresh();
   }
 
   async function onGoogle() {
     setError(null);
     setGoogleLoading(true);
-    const { error } = await authClient.signIn.social({
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      callbackURL: "/app/dashboard",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/app/dashboard`,
+      },
     });
     if (error) {
       setGoogleLoading(false);
@@ -125,6 +153,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </Field>
 
         {error && <Hint error>{error}</Hint>}
+        {notice && <Hint className="text-success">{notice}</Hint>}
 
         <Button type="submit" size="lg" className="mt-1 w-full" disabled={loading}>
           {loading

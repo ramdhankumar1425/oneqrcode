@@ -1,7 +1,7 @@
 import { customAlphabet } from "nanoid";
-import { and, count, eq, isNull } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode } from "@/db/schemas";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import type { QrCodeRow } from "@/lib/db-types";
 
 // unambiguous alphabet (no 0/O/1/l/I) for human-friendly short links
 const SHORT_CODE_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyz";
@@ -25,57 +25,69 @@ export function isValidHttpUrl(value: string): boolean {
   return url.protocol === "http:" || url.protocol === "https:";
 }
 
-export async function isShortCodeTaken(shortCode: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: qrCode.id })
-    .from(qrCode)
-    .where(eq(qrCode.shortCode, shortCode))
-    .limit(1);
-  return row != null;
+type Client = SupabaseClient;
+
+async function client(supabase?: Client): Promise<Client> {
+  return supabase ?? ((await createClient()) as Client);
+}
+
+/** Whether a short_code exists (across all users — via a SECURITY DEFINER RPC,
+ *  because RLS otherwise hides other users' rows). */
+export async function isShortCodeTaken(
+  shortCode: string,
+  supabase?: Client,
+): Promise<boolean> {
+  const sb = await client(supabase);
+  const { data } = await sb.rpc("short_code_taken", { code: shortCode });
+  return data === true;
 }
 
 /** Generate a unique random short code, retrying on the rare collision. */
-export async function generateShortCode(): Promise<string> {
+export async function generateShortCode(supabase?: Client): Promise<string> {
+  const sb = await client(supabase);
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = makeCode();
-    if (!(await isShortCodeTaken(code))) return code;
+    if (!(await isShortCodeTaken(code, sb))) return code;
   }
   throw new Error("Could not generate a unique short code");
 }
 
-/** Count a user's active (non-archived) codes. */
-export async function countActiveCodes(userId: string): Promise<number> {
-  const [row] = await db
-    .select({ value: count() })
-    .from(qrCode)
-    .where(and(eq(qrCode.userId, userId), isNull(qrCode.archivedAt)));
-  return row?.value ?? 0;
+/** Count the user's active (non-archived) codes. RLS scopes to the user. */
+export async function countActiveCodes(supabase?: Client): Promise<number> {
+  const sb = await client(supabase);
+  const { count } = await sb
+    .from("qr_code")
+    .select("*", { count: "exact", head: true })
+    .is("archived_at", null);
+  return count ?? 0;
 }
 
 /**
  * Count active *dynamic* codes — the plan limit applies only to these.
  * Static codes encode their destination directly and are unlimited on every plan.
  */
-export async function countActiveDynamicCodes(userId: string): Promise<number> {
-  const [row] = await db
-    .select({ value: count() })
-    .from(qrCode)
-    .where(
-      and(
-        eq(qrCode.userId, userId),
-        isNull(qrCode.archivedAt),
-        eq(qrCode.type, "dynamic"),
-      ),
-    );
-  return row?.value ?? 0;
+export async function countActiveDynamicCodes(
+  supabase?: Client,
+): Promise<number> {
+  const sb = await client(supabase);
+  const { count } = await sb
+    .from("qr_code")
+    .select("*", { count: "exact", head: true })
+    .is("archived_at", null)
+    .eq("type", "dynamic");
+  return count ?? 0;
 }
 
-/** Fetch a code owned by the user, or null (ownership guard). */
-export async function getOwnedCode(id: string, userId: string) {
-  const [row] = await db
-    .select()
-    .from(qrCode)
-    .where(and(eq(qrCode.id, id), eq(qrCode.userId, userId)))
-    .limit(1);
-  return row ?? null;
+/** Fetch a code by id. RLS returns null for codes the user doesn't own. */
+export async function getOwnedCode(
+  id: string,
+  supabase?: Client,
+): Promise<QrCodeRow | null> {
+  const sb = await client(supabase);
+  const { data } = await sb
+    .from("qr_code")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as QrCodeRow | null) ?? null;
 }

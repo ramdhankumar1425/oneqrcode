@@ -1,18 +1,31 @@
 import { cache } from "react";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+
+export type CurrentUser = {
+  id: string;
+  email: string;
+  name: string;
+  image: string | null;
+};
 
 /**
- * Full better-auth session ({ session, user }) or null.
- * Wrapped in React cache() so the layout and page in a single request share
- * one session validation instead of re-hitting better-auth/the DB each call.
+ * The signed-in user (validated against Supabase Auth), or null.
+ * Wrapped in React cache() so the layout and page in one request share a single
+ * getUser() call. `name` falls back to auth metadata; profiles.name is the
+ * authoritative editable value (see getAppContext).
  */
-export const getSession = cache(async () => {
-  return auth.api.getSession({ headers: await headers() });
-});
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
 
-/** The signed-in user, or null. */
-export const getCurrentUser = cache(async () => {
-  const result = await getSession();
-  return result?.user ?? null;
+  const meta = user.user_metadata ?? {};
+  return {
+    id: user.id,
+    email: user.email ?? "",
+    name: (meta.name as string) ?? (meta.full_name as string) ?? "",
+    image: (meta.avatar_url as string) ?? null,
+  };
 });

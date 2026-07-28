@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { getAppContext } from "@/lib/app-context";
+import type { QrCodeRow } from "@/lib/db-types";
 import { Badge, Eyebrow } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,25 +13,25 @@ export default async function DashboardPage() {
   const ctx = await getAppContext();
   if (!ctx) redirect("/login");
 
-  // independent reads — run them in one wall-clock round-trip, not two
-  const [[stats], recent] = await Promise.all([
-    db
-      .select({
-        activeDynamic: sql<number>`count(*) filter (where ${qrCode.type} = 'dynamic' and ${qrCode.archivedAt} is null)`,
-        activeTotal: sql<number>`count(*) filter (where ${qrCode.archivedAt} is null)`,
-        totalScans: sql<number>`coalesce(sum(${qrCode.scanCount}), 0)`,
-      })
-      .from(qrCode)
-      .where(eq(qrCode.userId, ctx.user.id)),
-    db
-      .select()
-      .from(qrCode)
-      .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
-      .orderBy(desc(qrCode.createdAt))
+  const supabase = await createClient();
+
+  const [{ data: statsRows }, { data: recentRows }] = await Promise.all([
+    supabase.rpc("dashboard_stats"),
+    supabase
+      .from("qr_code")
+      .select("*")
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
       .limit(5),
   ]);
 
-  const activeDynamic = Number(stats?.activeDynamic ?? 0);
+  const stats = (Array.isArray(statsRows) ? statsRows[0] : statsRows) as
+    | { active_dynamic: number; active_total: number; total_scans: number }
+    | undefined;
+  const recent = (recentRows ?? []) as QrCodeRow[];
+
+  const activeDynamic = Number(stats?.active_dynamic ?? 0);
+  const totalScans = Number(stats?.total_scans ?? 0);
   const limit = ctx.plan.limits.qrCodes;
   const atLimit = limit != null && activeDynamic >= limit;
 
@@ -41,7 +40,7 @@ export default async function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-display text-3xl">
-            Hi, {ctx.user.name.split(" ")[0]}
+            Hi, {ctx.user.name.split(" ")[0] || "there"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Here&apos;s what&apos;s happening with your codes.
@@ -72,7 +71,7 @@ export default async function DashboardPage() {
         <StatCard
           label="Total scans"
           icon={<Scan size={12} />}
-          value={Number(stats?.totalScans ?? 0).toLocaleString("en-US")}
+          value={totalScans.toLocaleString("en-US")}
         />
         <StatCard
           label="Plan"
@@ -132,18 +131,18 @@ export default async function DashboardPage() {
                     <Badge variant={code.type === "static" ? "outline" : "soft"}>
                       {code.type}
                     </Badge>
-                    <Badge variant={code.isActive ? "success" : "warning"}>
-                      {code.isActive ? "active" : "inactive"}
+                    <Badge variant={code.is_active ? "success" : "warning"}>
+                      {code.is_active ? "active" : "inactive"}
                     </Badge>
                   </div>
                   <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                    {code.type === "dynamic" ? `/r/${code.shortCode} → ` : ""}
-                    {code.destinationUrl}
+                    {code.type === "dynamic" ? `/r/${code.short_code} → ` : ""}
+                    {code.destination_url}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
                   <Scan size={14} />
-                  {code.scanCount.toLocaleString("en-US")}
+                  {code.scan_count.toLocaleString("en-US")}
                 </div>
               </Card>
             </Link>

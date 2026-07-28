@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode } from "@/db/schemas";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cacheDestination, getCachedDestination } from "@/lib/cache";
 
 /**
  * Public redirect hot path: oqr.to/r/<shortCode>.
  *
- * Cache-first: a hit means the code is active and we already know where it
- * points, so we skip the database entirely. On a miss we read the row, and
- * only cache (and redirect) when the code is active — so the mere presence of
- * a cache entry implies an active code. The destination-update / archive paths
- * invalidate this key (see lib/cache + PATCH/DELETE /api/qr/[id]).
+ * No logged-in user here, so we use the service-role client (bypasses RLS) to
+ * resolve any code by its short_code. Cache-first: a hit means the code is
+ * active and we already know where it points, so we skip the database entirely.
+ * On a miss we read the row, and only cache (and redirect) when the code is
+ * active — so the mere presence of a cache entry implies an active code. The
+ * destination-update / archive paths invalidate this key (see lib/cache + the
+ * QR update actions).
  */
 
 type Ctx = { params: Promise<{ shortCode: string }> };
@@ -36,38 +36,34 @@ export async function GET(request: Request, { params }: Ctx) {
     return redirectTo(cached);
   }
 
-  // 2) cache miss → look up the code
-  const [code] = await db
-    .select({
-      id: qrCode.id,
-      shortCode: qrCode.shortCode,
-      destinationUrl: qrCode.destinationUrl,
-      isActive: qrCode.isActive,
-      archivedAt: qrCode.archivedAt,
-    })
-    .from(qrCode)
-    .where(eq(qrCode.shortCode, shortCode))
-    .limit(1);
+  // 2) cache miss → look up the code (service-role: no user session on this path)
+  const supabase = createAdminClient();
+  const { data: code } = await supabase
+    .from("qr_code")
+    .select("id, short_code, destination_url, is_active, archived_at")
+    .eq("short_code", shortCode)
+    .maybeSingle();
 
-  if (!code || code.archivedAt || !code.isActive) {
+  if (!code || code.archived_at || !code.is_active) {
     return notFound();
   }
 
   // 3) warm the cache for subsequent scans, then redirect
-  await cacheDestination(code.shortCode, code.destinationUrl);
-  recordScan(code.shortCode, request);
-  return redirectTo(code.destinationUrl);
+  await cacheDestination(code.short_code, code.destination_url);
+  recordScan(code.short_code, request);
+  return redirectTo(code.destination_url);
 }
 
 /**
  * TODO(scan-audit): record scan analytics without slowing the redirect.
  *
- * This should run fire-and-forget (do NOT await on the redirect path) and:
- *   1. Insert a qr_scan row: hashed IP (ipHash), country (from geo headers),
- *      parsed deviceType/os/browser (from user-agent), referrer, and utm_*
+ * This should run fire-and-forget (do NOT await on the redirect path) and, via
+ * the service-role client:
+ *   1. Insert a qr_scan row: hashed IP (ip_hash), country (from geo headers),
+ *      parsed device_type/os/browser (from user-agent), referrer, and utm_*
  *      params off the request URL.
- *   2. Bump the denormalized counters on qr_code: scanCount += 1 and
- *      lastScannedAt = now (so Free-plan "basic scan counts" work without
+ *   2. Bump the denormalized counters on qr_code: scan_count += 1 and
+ *      last_scanned_at = now (so Free-plan "basic scan counts" work without
  *      querying qr_scan).
  *
  * Prefer offloading to a queue / waitUntil() so redirect latency stays flat.

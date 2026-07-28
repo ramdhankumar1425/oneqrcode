@@ -1,9 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode, qrDesign, qrRedirect } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { invalidateDestination } from "@/lib/cache";
 import {
   countActiveDynamicCodes,
@@ -27,11 +25,11 @@ export async function getDynamicAllowance(): Promise<{
   const current = await getCurrentUser();
   if (!current) return { limited: false, reached: false, planName: "Free" };
 
-  const plan = await getUserPlan(current.id);
+  const plan = await getUserPlan();
   if (plan.limits.qrCodes == null) {
     return { limited: false, reached: false, planName: plan.name };
   }
-  const count = await countActiveDynamicCodes(current.id);
+  const count = await countActiveDynamicCodes();
   return {
     limited: true,
     reached: count >= plan.limits.qrCodes,
@@ -62,12 +60,13 @@ export async function createCode(input: {
   }
 
   const type = input.type === "static" ? "static" : "dynamic";
+  const supabase = await createClient();
 
   // plan limit applies to dynamic codes only; static is unlimited everywhere
   if (type === "dynamic") {
-    const plan = await getUserPlan(current.id);
+    const plan = await getUserPlan();
     if (plan.limits.qrCodes != null) {
-      const activeCount = await countActiveDynamicCodes(current.id);
+      const activeCount = await countActiveDynamicCodes(supabase);
       if (activeCount >= plan.limits.qrCodes) {
         return {
           ok: false,
@@ -82,36 +81,47 @@ export async function createCode(input: {
     if (!isValidSlug(input.shortCode)) {
       return { ok: false, error: "Short code: 3–32 chars — letters, numbers, hyphens." };
     }
-    if (await isShortCodeTaken(input.shortCode)) {
+    if (await isShortCodeTaken(input.shortCode, supabase)) {
       return { ok: false, error: "That short code is already taken." };
     }
     shortCode = input.shortCode;
   } else {
-    shortCode = await generateShortCode();
+    shortCode = await generateShortCode(supabase);
   }
 
-  const [code] = await db
-    .insert(qrCode)
-    .values({ userId: current.id, title, shortCode, destinationUrl: input.destinationUrl, type })
-    .returning();
+  const { data: code, error } = await supabase
+    .from("qr_code")
+    .insert({
+      user_id: current.id,
+      title,
+      short_code: shortCode,
+      destination_url: input.destinationUrl,
+      type,
+    })
+    .select("id")
+    .single();
 
-  await db.insert(qrRedirect).values({
-    qrCodeId: code.id,
-    destinationUrl: input.destinationUrl,
+  if (error || !code) {
+    return { ok: false, error: "Couldn't create the code. Please try again." };
+  }
+
+  await supabase.from("qr_redirect").insert({
+    qr_code_id: code.id,
+    destination_url: input.destinationUrl,
   });
 
   const d = input.design;
   if (d && (d.foregroundColor || d.backgroundColor || d.logoUrl)) {
-    await db.insert(qrDesign).values({
-      qrCodeId: code.id,
-      foregroundColor: d.foregroundColor,
-      backgroundColor: d.backgroundColor,
-      logoUrl: d.logoUrl ?? undefined,
+    await supabase.from("qr_design").insert({
+      qr_code_id: code.id,
+      foreground_color: d.foregroundColor,
+      background_color: d.backgroundColor,
+      logo_url: d.logoUrl ?? null,
     });
   }
 
   revalidatePath("/app/codes");
-  return { ok: true, id: code.id };
+  return { ok: true, id: code.id as string };
 }
 
 export async function updateCode(
@@ -125,11 +135,12 @@ export async function updateCode(
   const current = await getCurrentUser();
   if (!current) return { ok: false, error: "Not authenticated" };
 
-  const code = await getOwnedCode(id, current.id);
+  const supabase = await createClient();
+  const code = await getOwnedCode(id, supabase);
   if (!code) return { ok: false, error: "Code not found" };
-  if (code.archivedAt) return { ok: false, error: "This code is archived." };
+  if (code.archived_at) return { ok: false, error: "This code is archived." };
 
-  const updates: Partial<typeof qrCode.$inferInsert> = {};
+  const updates: Record<string, unknown> = {};
   let destinationChanged = false;
   let activeChanged = false;
 
@@ -141,32 +152,33 @@ export async function updateCode(
     if (!isValidHttpUrl(input.destinationUrl)) {
       return { ok: false, error: "Enter a valid destination URL." };
     }
-    if (input.destinationUrl !== code.destinationUrl) {
-      updates.destinationUrl = input.destinationUrl;
+    if (input.destinationUrl !== code.destination_url) {
+      updates.destination_url = input.destinationUrl;
       destinationChanged = true;
     }
   }
-  if (input.isActive !== undefined && input.isActive !== code.isActive) {
-    updates.isActive = input.isActive;
+  if (input.isActive !== undefined && input.isActive !== code.is_active) {
+    updates.is_active = input.isActive;
     activeChanged = true;
   }
 
   if (Object.keys(updates).length === 0) return { ok: true };
+  updates.updated_at = new Date().toISOString();
 
-  const [updated] = await db
-    .update(qrCode)
-    .set(updates)
-    .where(eq(qrCode.id, code.id))
-    .returning();
+  const { error } = await supabase
+    .from("qr_code")
+    .update(updates)
+    .eq("id", code.id);
+  if (error) return { ok: false, error: "Couldn't save changes. Please try again." };
 
   if (destinationChanged) {
-    await db.insert(qrRedirect).values({
-      qrCodeId: code.id,
-      destinationUrl: updated.destinationUrl,
+    await supabase.from("qr_redirect").insert({
+      qr_code_id: code.id,
+      destination_url: updates.destination_url as string,
     });
   }
   if (destinationChanged || activeChanged) {
-    await invalidateDestination(code.shortCode);
+    await invalidateDestination(code.short_code);
   }
 
   revalidatePath("/app/codes");
@@ -181,26 +193,21 @@ export async function updateDesign(
   const current = await getCurrentUser();
   if (!current) return { ok: false, error: "Not authenticated" };
 
-  const code = await getOwnedCode(id, current.id);
+  const supabase = await createClient();
+  const code = await getOwnedCode(id, supabase);
   if (!code) return { ok: false, error: "Code not found" };
 
-  await db
-    .insert(qrDesign)
-    .values({
-      qrCodeId: code.id,
-      foregroundColor: input.foregroundColor,
-      backgroundColor: input.backgroundColor,
-      logoUrl: input.logoUrl ?? null,
-    })
-    .onConflictDoUpdate({
-      target: qrDesign.qrCodeId,
-      set: {
-        foregroundColor: input.foregroundColor,
-        backgroundColor: input.backgroundColor,
-        logoUrl: input.logoUrl ?? null,
-        updatedAt: new Date(),
-      },
-    });
+  const { error } = await supabase.from("qr_design").upsert(
+    {
+      qr_code_id: code.id,
+      foreground_color: input.foregroundColor,
+      background_color: input.backgroundColor,
+      logo_url: input.logoUrl ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "qr_code_id" },
+  );
+  if (error) return { ok: false, error: "Couldn't save the design. Please try again." };
 
   revalidatePath(`/app/codes/${id}`);
   return { ok: true };
@@ -212,15 +219,16 @@ export async function archiveCode(
   const current = await getCurrentUser();
   if (!current) return { ok: false, error: "Not authenticated" };
 
-  const code = await getOwnedCode(id, current.id);
+  const supabase = await createClient();
+  const code = await getOwnedCode(id, supabase);
   if (!code) return { ok: false, error: "Code not found" };
 
-  if (!code.archivedAt) {
-    await db
-      .update(qrCode)
-      .set({ archivedAt: new Date(), isActive: false })
-      .where(eq(qrCode.id, code.id));
-    await invalidateDestination(code.shortCode);
+  if (!code.archived_at) {
+    await supabase
+      .from("qr_code")
+      .update({ archived_at: new Date().toISOString(), is_active: false })
+      .eq("id", code.id);
+    await invalidateDestination(code.short_code);
   }
 
   revalidatePath("/app/codes");

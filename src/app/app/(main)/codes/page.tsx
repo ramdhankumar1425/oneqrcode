@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { db } from "@/index";
-import { qrCode } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { getAppContext } from "@/lib/app-context";
+import type { QrCodeRow } from "@/lib/db-types";
 import { Badge, Eyebrow } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,11 +12,13 @@ export default async function CodesPage() {
   const ctx = await getAppContext();
   if (!ctx) redirect("/login");
 
-  const codes = await db
-    .select()
-    .from(qrCode)
-    .where(and(eq(qrCode.userId, ctx.user.id), isNull(qrCode.archivedAt)))
-    .orderBy(desc(qrCode.createdAt));
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("qr_code")
+    .select("*")
+    .is("archived_at", null)
+    .order("created_at", { ascending: false });
+  const codes = (data ?? []) as QrCodeRow[];
 
   const activeDynamic = codes.filter((c) => c.type === "dynamic").length;
   const limit = ctx.plan.limits.qrCodes;
@@ -69,18 +70,18 @@ export default async function CodesPage() {
                     <Badge variant={code.type === "static" ? "outline" : "soft"}>
                       {code.type}
                     </Badge>
-                    <Badge variant={code.isActive ? "success" : "warning"}>
-                      {code.isActive ? "active" : "inactive"}
+                    <Badge variant={code.is_active ? "success" : "warning"}>
+                      {code.is_active ? "active" : "inactive"}
                     </Badge>
                   </div>
                   <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                    {code.type === "dynamic" ? `/r/${code.shortCode} → ` : ""}
-                    {code.destinationUrl}
+                    {code.type === "dynamic" ? `/r/${code.short_code} → ` : ""}
+                    {code.destination_url}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
                   <Scan size={14} />
-                  {code.scanCount.toLocaleString("en-US")}
+                  {code.scan_count.toLocaleString("en-US")}
                 </div>
               </Card>
             </Link>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { updateProfileName } from "@/lib/actions/profile";
 import { Button } from "@/components/ui/button";
 import { Field, Hint, Input, Label } from "@/components/ui/input";
 
@@ -24,10 +24,10 @@ export function ProfileForm({
     setErr(null);
     setMsg(null);
     setSaving(true);
-    const { error } = await authClient.updateUser({ name });
+    const result = await updateProfileName(name);
     setSaving(false);
-    if (error) {
-      setErr(error.message ?? "Could not update.");
+    if (!result.ok) {
+      setErr(result.error);
       return;
     }
     setMsg("Saved");

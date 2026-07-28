@@ -1,7 +1,5 @@
 import { cache } from "react";
-import { eq } from "drizzle-orm";
-import { db } from "@/index";
-import { user as userTable } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { type Plan } from "@/lib/plans";
 import { getCurrentUser } from "@/lib/session";
 import { getUserPlan } from "@/lib/subscription";
@@ -18,24 +16,26 @@ export const getAppContext = cache(async (): Promise<AppContext | null> => {
   const current = await getCurrentUser();
   if (!current) return null;
 
+  const supabase = await createClient();
+
   // independent reads — run them in one wall-clock round-trip, not two
-  const [[profile], plan] = await Promise.all([
-    db
-      .select({ onboardingCompletedAt: userTable.onboardingCompletedAt })
-      .from(userTable)
-      .where(eq(userTable.id, current.id))
-      .limit(1),
-    getUserPlan(current.id),
+  const [{ data: profile }, plan] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("name, onboarding_completed_at")
+      .eq("id", current.id)
+      .maybeSingle(),
+    getUserPlan(),
   ]);
 
   return {
     user: {
       id: current.id,
-      name: current.name,
+      name: (profile?.name as string) || current.name,
       email: current.email,
-      image: current.image ?? null,
+      image: current.image,
     },
     plan,
-    onboardingCompleted: profile?.onboardingCompletedAt != null,
+    onboardingCompleted: profile?.onboarding_completed_at != null,
   };
 });

@@ -1,9 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { desc, eq } from "drizzle-orm";
-import { db } from "@/index";
-import { qrDesign, qrRedirect } from "@/db/schemas";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/session";
 import { getOwnedCode } from "@/lib/qr";
+import type { QrDesignRow, QrRedirectRow } from "@/lib/db-types";
 import { CodeDetail, type CodeDetailData } from "@/components/app/code-detail";
 
 export default async function CodeDetailPage({
@@ -15,43 +14,49 @@ export default async function CodeDetailPage({
   if (!user) redirect("/login");
 
   const { id } = await params;
-  const code = await getOwnedCode(id, user.id);
-  if (!code || code.archivedAt) notFound();
+  const supabase = await createClient();
 
-  const [design] = await db
-    .select()
-    .from(qrDesign)
-    .where(eq(qrDesign.qrCodeId, code.id))
-    .limit(1);
+  const code = await getOwnedCode(id, supabase);
+  if (!code || code.archived_at) notFound();
 
-  const redirects = await db
-    .select({
-      destinationUrl: qrRedirect.destinationUrl,
-      createdAt: qrRedirect.createdAt,
-    })
-    .from(qrRedirect)
-    .where(eq(qrRedirect.qrCodeId, code.id))
-    .orderBy(desc(qrRedirect.createdAt))
-    .limit(20);
+  const [{ data: designRow }, { data: redirectRows }] = await Promise.all([
+    supabase
+      .from("qr_design")
+      .select("*")
+      .eq("qr_code_id", code.id)
+      .maybeSingle(),
+    supabase
+      .from("qr_redirect")
+      .select("destination_url, created_at")
+      .eq("qr_code_id", code.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  const design = designRow as QrDesignRow | null;
+  const redirects = (redirectRows ?? []) as Pick<
+    QrRedirectRow,
+    "destination_url" | "created_at"
+  >[];
 
   const data: CodeDetailData = {
     id: code.id,
     title: code.title,
-    shortCode: code.shortCode,
-    destinationUrl: code.destinationUrl,
-    type: code.type as "dynamic" | "static",
-    isActive: code.isActive,
-    scanCount: code.scanCount,
+    shortCode: code.short_code,
+    destinationUrl: code.destination_url,
+    type: code.type,
+    isActive: code.is_active,
+    scanCount: code.scan_count,
     design: design
       ? {
-          foregroundColor: design.foregroundColor,
-          backgroundColor: design.backgroundColor,
-          logoUrl: design.logoUrl,
+          foregroundColor: design.foreground_color,
+          backgroundColor: design.background_color,
+          logoUrl: design.logo_url,
         }
       : null,
     redirects: redirects.map((r) => ({
-      destinationUrl: r.destinationUrl,
-      createdAt: r.createdAt.toISOString(),
+      destinationUrl: r.destination_url,
+      createdAt: r.created_at,
     })),
   };
 

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { useSession } from "@/lib/auth-client";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Menu, X } from "@/components/ui/icons";
 import { Logo } from "@/components/ui/logo";
@@ -16,8 +16,16 @@ const links = [
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
-  const { data: session } = useSession();
-  const loggedIn = Boolean(session?.user);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setLoggedIn(!!data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) =>
+      setLoggedIn(!!session?.user),
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   return (
     <div className="fixed inset-x-0 top-4 z-50 px-4">
