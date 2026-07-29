@@ -5,10 +5,10 @@ import { Analytics } from "@vercel/analytics/next";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://www.oneqrcode.site";
-const SITE_NAME = "oneqrcode";
-const TITLE = "oneqrcode — Dynamic QR codes you can update anytime";
+const SITE_NAME = "OneQRCode";
+const TITLE = "OneQRCode — Dynamic QR codes you can update anytime";
 const DESCRIPTION =
-  "Print a QR code once and point it anywhere, forever. oneqrcode gives you long-lasting QR codes whose destination you can change any time — no reprint needed. Track scans, customize the design, and manage everything from one dashboard.";
+  "Print a QR code once and point it anywhere, forever. OneQRCode gives you long-lasting QR codes whose destination you can change any time — no reprint needed. Track scans, customize the design, and manage everything from one dashboard.";
 const GOOGLE_VERIFICATION =
   process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION ||
   "your-google-verification-code";
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
         url: "/og.jpg",
         width: 1200,
         height: 630,
-        alt: "oneqrcode — move the link, keep the code",
+        alt: "OneQRCode — move the link, keep the code",
       },
     ],
   },
