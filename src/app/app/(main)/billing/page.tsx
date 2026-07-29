@@ -11,7 +11,7 @@ export default async function BillingPage() {
   const supabase = await createClient();
   const { data: sub } = await supabase
     .from("subscription")
-    .select("plan, status, current_period_end")
+    .select("plan, status, current_period_end, cancel_at_period_end")
     .in("status", ["active", "trialing", "incomplete"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -31,6 +31,7 @@ export default async function BillingPage() {
           currentPlanId={currentPlanId}
           subStatus={(sub?.status as string | undefined) ?? null}
           periodEnd={(sub?.current_period_end as string | undefined) ?? null}
+          cancelAtPeriodEnd={Boolean(sub?.cancel_at_period_end)}
           userName={ctx.user.name}
           userEmail={ctx.user.email}
         />

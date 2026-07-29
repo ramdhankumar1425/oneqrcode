@@ -26,12 +26,14 @@ export function BillingPanel({
   currentPlanId,
   subStatus,
   periodEnd,
+  cancelAtPeriodEnd,
   userName,
   userEmail,
 }: {
   currentPlanId: PlanId;
   subStatus: string | null;
   periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
   userName: string;
   userEmail: string;
 }) {
@@ -107,7 +109,12 @@ export function BillingPanel({
   }
 
   async function cancel() {
-    if (!confirm("Cancel your subscription? You'll drop to the Free plan.")) return;
+    if (
+      !confirm(
+        "Cancel your subscription? Pro stays active until the end of your current billing period, then you'll move to Free.",
+      )
+    )
+      return;
     setLoading(true);
     await cancelActiveSubscription();
     setLoading(false);
@@ -193,7 +200,16 @@ export function BillingPanel({
                     </Button>
                   </div>
                 )}
-                {id === "pro" && proActive && (
+                {id === "pro" && proActive && cancelAtPeriodEnd && (
+                  <Hint>
+                    {periodEnd
+                      ? `Your Pro plan stays active until ${new Date(
+                          periodEnd,
+                        ).toLocaleDateString()} and won't renew.`
+                      : "Your Pro plan is scheduled to cancel at the end of the current period."}
+                  </Hint>
+                )}
+                {id === "pro" && proActive && !cancelAtPeriodEnd && (
                   <div className="flex flex-col gap-2">
                     {periodEnd && (
                       <Hint>

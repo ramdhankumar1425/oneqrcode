@@ -131,8 +131,13 @@ export async function cancelActiveSubscription(): Promise<
 
   if (!sub) return { ok: false, error: "No active subscription to cancel." };
 
+  // An unpaid (incomplete) subscription has no paid period to preserve — cancel
+  // it outright. A paid one is cancelled at cycle end so the customer keeps Pro
+  // for the period they've already been charged for.
+  const immediate = sub.status === "incomplete";
+
   try {
-    await cancelSubscription(sub.rzp_subscription_id);
+    await cancelSubscription(sub.rzp_subscription_id, !immediate);
   } catch (error) {
     if (error instanceof RazorpayError) {
       return { ok: false, error: "Payment provider error. Please try again." };
@@ -140,13 +145,15 @@ export async function cancelActiveSubscription(): Promise<
     throw error;
   }
 
+  const now = new Date().toISOString();
   await admin
     .from("subscription")
-    .update({
-      status: "canceled",
-      canceled_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(
+      immediate
+        ? { status: "canceled", canceled_at: now, updated_at: now }
+        : // keep status active — access continues until current_period_end
+          { cancel_at_period_end: true, canceled_at: now, updated_at: now },
+    )
     .eq("id", sub.id);
 
   revalidatePath("/app/billing");

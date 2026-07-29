@@ -104,12 +104,22 @@ export async function fetchSubscription(
   return parseSubscription(raw);
 }
 
+/**
+ * Cancel a subscription. `atCycleEnd` (default) keeps it active until the paid
+ * period ends, then stops renewals — so a customer who's already been charged
+ * keeps access for the rest of the cycle. Pass false to cancel immediately
+ * (used for unpaid/incomplete subscriptions).
+ */
 export async function cancelSubscription(
   subscriptionId: string,
+  atCycleEnd = true,
 ): Promise<void> {
   await razorpayFetch(
     `/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
-    { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ cancel_at_cycle_end: atCycleEnd ? 1 : 0 }),
+    },
   );
 }
 

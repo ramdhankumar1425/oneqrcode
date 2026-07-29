@@ -95,24 +95,47 @@ export async function POST(request: Request) {
     if (rzpSubId) {
       const { data: sub } = await admin
         .from("subscription")
-        .select("id")
+        .select("id, current_period_end")
         .eq("rzp_subscription_id", rzpSubId)
         .maybeSingle();
 
       if (sub) {
         const mapped = mapSubscriptionStatus(subStatus);
         if (mapped) {
-          await admin
-            .from("subscription")
-            .update({
-              status: mapped,
-              ...(currentEnd ? { current_period_end: currentEnd } : {}),
-              ...(mapped === "canceled"
-                ? { canceled_at: new Date().toISOString() }
-                : {}),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", sub.id);
+          const now = Date.now();
+          const existingEnd = sub.current_period_end
+            ? new Date(sub.current_period_end as string)
+            : null;
+          const incomingEnd = currentEnd ? new Date(currentEnd) : null;
+          // paid-through date never moves backward (a cancel event must not
+          // shorten a period the customer already paid for)
+          const paidThrough =
+            incomingEnd && (!existingEnd || incomingEnd > existingEnd)
+              ? incomingEnd
+              : existingEnd;
+
+          const update: Record<string, unknown> = {
+            updated_at: new Date().toISOString(),
+          };
+          if (
+            paidThrough &&
+            (!existingEnd || paidThrough.getTime() !== existingEnd.getTime())
+          ) {
+            update.current_period_end = paidThrough.toISOString();
+          }
+
+          if (mapped === "canceled") {
+            // cancellation (ours or via the payment method): flag it, but keep
+            // the plan active until the paid period actually elapses
+            update.cancel_at_period_end = true;
+            update.canceled_at = new Date().toISOString();
+            update.status =
+              paidThrough && paidThrough.getTime() > now ? "active" : "canceled";
+          } else {
+            update.status = mapped;
+          }
+
+          await admin.from("subscription").update(update).eq("id", sub.id);
         }
 
         // record/refresh the payment ledger row for charge & refund events
