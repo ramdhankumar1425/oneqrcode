@@ -19,8 +19,10 @@ export type PlanLimits = {
 export type Plan = {
   id: PlanId;
   name: string;
-  /** price in minor units (paise), per interval */
+  /** current price in minor units (paise), per interval */
   price: number;
+  /** pre-discount price in paise, shown struck-through; null = no discount */
+  originalPrice: number | null;
   currency: "INR";
   interval: "month" | null; // null = free / no billing cycle
   /** Razorpay plan id, or null for free (no gateway subscription) */
@@ -34,6 +36,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "free",
     name: "Free",
     price: 0,
+    originalPrice: null,
     currency: "INR",
     interval: null,
     rzpPlanId: null,
@@ -52,7 +55,8 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    price: 90_000, // ₹900.00
+    price: 19_900, // ₹199.00 (discounted)
+    originalPrice: 39_900, // ₹399.00
     currency: "INR",
     interval: "month",
     rzpPlanId: process.env.RAZORPAY_PLAN_ID_PRO ?? null,
@@ -82,6 +86,14 @@ export function isPlanId(value: string): value is PlanId {
 
 export function getPlan(id: PlanId): Plan {
   return PLANS[id];
+}
+
+/** Discount percentage vs the original price, or null when there's no discount. */
+export function discountPercent(plan: Plan): number | null {
+  if (!plan.originalPrice || plan.originalPrice <= plan.price) return null;
+  return Math.round(
+    ((plan.originalPrice - plan.price) / plan.originalPrice) * 100,
+  );
 }
 
 /** Resolve a subscription row's plan; falls back to free when there's no row. */

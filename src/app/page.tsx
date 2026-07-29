@@ -23,6 +23,11 @@ import {
 import { LogoMark } from "@/components/ui/logo";
 import { QrInteractive } from "@/components/marketing/qr-interactive";
 import { getCurrentUser } from "@/lib/session";
+import { PLANS, discountPercent } from "@/lib/plans";
+
+/** Format paise as ₹ for display. */
+const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN")}`;
+const proDiscount = discountPercent(PLANS.pro);
 
 const useCases = [
   "Business cards",
@@ -66,7 +71,9 @@ const steps = [
 const tiers = [
   {
     name: "Free",
-    price: "₹0",
+    price: inr(PLANS.free.price),
+    originalPrice: null as string | null,
+    discount: null as string | null,
     period: "forever",
     blurb: "Try permanence on for size.",
     href: "/signup",
@@ -82,7 +89,9 @@ const tiers = [
   },
   {
     name: "Pro",
-    price: "₹900",
+    price: inr(PLANS.pro.price),
+    originalPrice: PLANS.pro.originalPrice ? inr(PLANS.pro.originalPrice) : null,
+    discount: proDiscount ? `${proDiscount}% off` : null,
     period: "per month",
     blurb: "For brands with things in print.",
     href: "/signup",
@@ -294,13 +303,21 @@ export default async function Home() {
                       <CardTitle className="text-lg">{tier.name}</CardTitle>
                       <CardDescription>{tier.blurb}</CardDescription>
                     </div>
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <span className="text-5xl font-semibold tracking-tight tabular-nums">
                         {tier.price}
                       </span>
                       <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
                         / {tier.period}
                       </span>
+                      {tier.originalPrice && (
+                        <span className="text-xl font-medium text-muted-foreground line-through tabular-nums">
+                          {tier.originalPrice}
+                        </span>
+                      )}
+                      {tier.discount && (
+                        <Badge variant="accent">{tier.discount}</Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-5 pt-2">

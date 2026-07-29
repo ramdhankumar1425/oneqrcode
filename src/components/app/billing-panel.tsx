@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, discountPercent, type PlanId } from "@/lib/plans";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -152,7 +152,7 @@ export function BillingPanel({
                     <Badge variant="warning">Pending</Badge>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1.5">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-4xl font-semibold tracking-tight">
                     {formatPrice(plan.price)}
                   </span>
@@ -160,6 +160,14 @@ export function BillingPanel({
                     <span className="font-mono text-xs uppercase text-muted-foreground">
                       / {plan.interval}
                     </span>
+                  )}
+                  {plan.originalPrice && (
+                    <span className="text-lg font-medium text-muted-foreground line-through">
+                      {formatPrice(plan.originalPrice)}
+                    </span>
+                  )}
+                  {discountPercent(plan) && (
+                    <Badge variant="accent">{discountPercent(plan)}% off</Badge>
                   )}
                 </div>
                 <ul className="flex flex-col gap-2">
