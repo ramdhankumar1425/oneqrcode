@@ -382,10 +382,10 @@ export default async function Home() {
       <footer className="border-t border-border">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
           <div className="flex flex-col items-start gap-4">
-            <span className="inline-flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1">
               <LogoMark size="sm" />
               <span className="text-lg font-semibold tracking-tight">
-                one<span className="font-serif italic font-normal">qr</span>code
+                OneQRCode
               </span>
             </span>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">

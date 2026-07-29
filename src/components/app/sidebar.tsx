@@ -54,12 +54,10 @@ export function Sidebar({
       <Link
         href="/"
         onClick={() => setOpen(false)}
-        className="mb-5 inline-flex items-center gap-2.5 px-1"
+        className="mb-5 inline-flex items-center gap-1 px-1"
       >
         <LogoMark size="sm" />
-        <span className="text-lg font-semibold tracking-tight">
-          one<span className="font-serif italic font-normal">qr</span>code
-        </span>
+        <span className="text-lg font-semibold tracking-tight">OneQRCode</span>
       </Link>
 
       <Button

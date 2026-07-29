@@ -29,12 +29,19 @@ export function Navbar() {
 
   return (
     <div className="fixed inset-x-0 top-4 z-50 px-4">
-      <div className="mx-auto max-w-5xl rounded-full border border-border bg-surface/85 shadow-card backdrop-blur">
-        <div className="flex items-center justify-between gap-4 py-2.5 pl-4 pr-2.5">
+      <div
+        className={cn(
+          "mx-auto max-w-5xl border border-border bg-surface/85 shadow-card backdrop-blur",
+          // full pill when collapsed; softer radius (+ clip) once the mobile menu expands
+          open ? "overflow-hidden rounded-3xl md:rounded-full" : "rounded-full",
+        )}
+      >
+        <div className="flex items-center justify-between gap-3 py-2.5 pl-3 pr-2.5 sm:gap-4 sm:pl-4">
           <Link
             href="/"
             aria-label="oneqrcode home"
             onClick={() => setOpen(false)}
+            className="items-center flex"
           >
             <Logo />
           </Link>
@@ -81,7 +88,7 @@ export function Navbar() {
         <div
           className={cn(
             "flex-col gap-1 border-t border-border px-4 py-3 md:hidden",
-            open ? "flex" : "hidden"
+            open ? "flex" : "hidden",
           )}
         >
           {links.map((link) => (
@@ -101,7 +108,12 @@ export function Navbar() {
               </Button>
             ) : (
               <>
-                <Button variant="outline" size="sm" href="/login" className="flex-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  href="/login"
+                  className="flex-1"
+                >
                   Log in
                 </Button>
                 <Button size="sm" href="/signup" className="flex-1">
